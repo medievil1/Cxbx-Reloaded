@@ -34,6 +34,7 @@
 #include "core\kernel\support\Emu.h"
 #include "EmuShared.h"
 #include "core\hle\XACTENG\XactEng.h"
+#include "core\kernel\memory-manager\VMManager.h"
 
 #include <mmreg.h>
 #include <msacm.h>
@@ -64,7 +65,7 @@ xbox::hresult_xt WINAPI xbox::EMUPATCH(XACTEngineCreate)
 
 	// TODO: Any other form of initialization?
 
-	*ppEngine = (X_XACTEngine*)ExAllocatePool(sizeof( X_XACTEngine ));
+	*ppEngine = (X_XACTEngine*)g_VMManager.AllocateZeroed(sizeof( X_XACTEngine ));
 
 		
 	
@@ -108,7 +109,7 @@ xbox::hresult_xt WINAPI xbox::EMUPATCH(IXACTEngine_RegisterWaveBank)
 
 	// TODO: Implement
 
-	*ppWaveBank = (X_XACTWaveBank*)ExAllocatePool(sizeof( X_XACTWaveBank ));
+	*ppWaveBank = (X_XACTWaveBank*)g_VMManager.AllocateZeroed(sizeof( X_XACTWaveBank ));
 
 	RETURN(S_OK);
 }
@@ -131,7 +132,7 @@ xbox::hresult_xt WINAPI xbox::EMUPATCH(IXACTEngine_RegisterStreamedWaveBank)
 
 	// TODO: Implement
 
-	*ppWaveBank = (X_XACTWaveBank*)ExAllocatePool(sizeof( X_XACTWaveBank ));
+	*ppWaveBank = (X_XACTWaveBank*)g_VMManager.AllocateZeroed(sizeof( X_XACTWaveBank ));
 
 	RETURN(S_OK);
 }
@@ -156,7 +157,7 @@ xbox::hresult_xt WINAPI xbox::EMUPATCH(IXACTEngine_CreateSoundBank)
 
 	// TODO: Implement
 
-	*ppSoundBank = (X_XACTSoundBank*)ExAllocatePool(sizeof( X_XACTSoundBank ));
+	*ppSoundBank = (X_XACTSoundBank*)g_VMManager.AllocateZeroed(sizeof( X_XACTSoundBank ));
 
 	RETURN(S_OK);
 }
@@ -202,7 +203,7 @@ xbox::hresult_xt WINAPI xbox::EMUPATCH(IXACTEngine_CreateSoundSource)
 		LOG_FUNC_ARG(ppSoundSource)
 		LOG_FUNC_END;
 
-	*ppSoundSource = (X_XACTSoundSource*)ExAllocatePool(sizeof( X_XACTSoundSource ));
+	*ppSoundSource = (X_XACTSoundSource*)g_VMManager.AllocateZeroed(sizeof( X_XACTSoundSource ));
 
 	RETURN(S_OK);
 }
@@ -499,7 +500,7 @@ xbox::hresult_xt WINAPI xbox::EMUPATCH(IXACTEngine_UnRegisterWaveBank)
 	// to IXACTWaveBank is released.
 
 //	if(pWaveBank)
-//		ExFreePool(pWaveBank);
+//		g_VMManager.Deallocate((VAddr)pWaveBank);
 
 	RETURN(S_OK);
 }

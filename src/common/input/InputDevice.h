@@ -63,6 +63,7 @@ typedef enum class _XBOX_INPUT_DEVICE : int {
 	MEMORY_UNIT,
 	IR_DONGLE,
 	STEEL_BATTALION_CONTROLLER,
+	ARCADE_STICK,
 	DEVICE_MAX,
 }
 XBOX_INPUT_DEVICE;
@@ -93,6 +94,7 @@ public:
 	{
 	public:
 		virtual ControlState GetState() const = 0;
+		virtual bool IsDetectable() const { return true; };
 	};
 
 	class Output : public IoControl

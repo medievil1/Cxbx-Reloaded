@@ -72,6 +72,11 @@ void DukeInputWindow::Initialize(HWND hwnd, int port_num, int dev_type)
 	}
 	break;
 
+	case to_underlying(XBOX_INPUT_DEVICE::ARCADE_STICK): {
+		title += "Arcade joystick at port ";
+	}
+	break;
+
 	}
 	SendMessage(m_hwnd_window, WM_SETTEXT, 0,
 		reinterpret_cast<LPARAM>((title + std::to_string(PORT_INC(m_port_num))).c_str()));
@@ -196,7 +201,8 @@ void DukeInputWindow::UpdateProfile(const std::string &name, int command)
 	}
 	break;
 
-	case BUTTON_CLEAR: {
+	case BUTTON_CLEAR:
+	case BUTTON_SWAP: {
 		m_bHasChanges = true;
 	}
 	break;
@@ -249,7 +255,8 @@ INT_PTR CALLBACK DlgXidControllerConfigProc(HWND hWndDlg, UINT uMsg, WPARAM wPar
 
 		// Ensure that the controller type is valid
 		assert(dev_type == to_underlying(XBOX_INPUT_DEVICE::MS_CONTROLLER_DUKE) ||
-			dev_type == to_underlying(XBOX_INPUT_DEVICE::MS_CONTROLLER_S));
+			dev_type == to_underlying(XBOX_INPUT_DEVICE::MS_CONTROLLER_S) ||
+			dev_type == to_underlying(XBOX_INPUT_DEVICE::ARCADE_STICK));
 
 		g_InputWindow = new DukeInputWindow;
 		g_InputWindow->Initialize(hWndDlg, port_num, dev_type);

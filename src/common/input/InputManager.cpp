@@ -64,6 +64,7 @@ int dev_num_buttons[to_underlying(XBOX_INPUT_DEVICE::DEVICE_MAX)] = {
 	0,
 	0,
 	SBC_NUM_BUTTONS, // STEEL_BATTALION_CONTROLLER
+	XBOX_CTRL_NUM_BUTTONS, // ARCADE_STICK
 };
 
 extern CXBX_CONTROLLER_HOST_BRIDGE g_XboxControllerHostBridge[4]; // hle xinput
@@ -71,11 +72,12 @@ extern CXBX_CONTROLLER_HOST_BRIDGE g_XboxControllerHostBridge[4]; // hle xinput
 
 InputDeviceManager g_InputDeviceManager;
 
-void InputDeviceManager::Initialize(bool is_gui)
+void InputDeviceManager::Initialize(bool is_gui, HWND hwnd)
 {
 	// Sdl::Init must be called last since it blocks when it succeeds
 	std::unique_lock<std::mutex> lck(m_Mtx);
 	m_bPendingShutdown = false;
+	m_hwnd = hwnd;
 
 	m_PollingThread = std::thread([this, is_gui]() {
 		XInput::Init(m_Mtx);
@@ -359,7 +361,8 @@ bool InputDeviceManager::UpdateXboxPortInput(int usb_port, void* Buffer, int Dir
 				switch (xid_type)
 				{
 				case to_underlying(XBOX_INPUT_DEVICE::MS_CONTROLLER_DUKE):
-				case to_underlying(XBOX_INPUT_DEVICE::MS_CONTROLLER_S): {
+				case to_underlying(XBOX_INPUT_DEVICE::MS_CONTROLLER_S):
+				case to_underlying(XBOX_INPUT_DEVICE::ARCADE_STICK): {
 					has_changed = UpdateInputXpad(dev_ptr, Buffer, Direction);
 				}
 				break;
@@ -623,6 +626,12 @@ void InputDeviceManager::RefreshDevices()
 	m_Cv.wait(lck, []() {
 		return Sdl::SdlPopulateOK;
 		});
+	for (auto &dev : m_Devices) {
+		if (StrStartsWith(dev->GetDeviceName(), "KeyboardMouse")) {
+			static_cast<DInput::KeyboardMouse *>(dev.get())->SetHwnd(m_hwnd);
+			break;
+		}
+	}
 }
 
 std::vector<std::string> InputDeviceManager::GetDeviceList() const

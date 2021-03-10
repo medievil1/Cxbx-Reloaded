@@ -38,7 +38,6 @@
 #include <ntstatus.h>
 #pragma warning(default:4005)
 #include "core\kernel\init\CxbxKrnl.h"
-#include "core\kernel\memory-manager\VMManager.h"
 #include "Logging.h"
 
 #include <filesystem>
@@ -133,42 +132,55 @@ FATX_SUPERBLOCK CxbxGetFatXSuperBlock(int partitionNumber)
 	return superblock;
 }
 
-int CxbxGetPartitionNumberFromHandle(HANDLE hFile)	
+static std::wstring CxbxGetFinalPathNameByHandle(HANDLE hFile)
 {
-	// Get which partition number is being accessed, by parsing the filename and extracting the last portion 
-	char buffer[MAX_PATH] = {0};
-	if (!GetFinalPathNameByHandle(hFile, buffer, MAX_PATH, VOLUME_NAME_DOS)) {
+	constexpr size_t INITIAL_BUF_SIZE = MAX_PATH;
+	std::wstring path(INITIAL_BUF_SIZE, '\0');
+
+	DWORD size = GetFinalPathNameByHandleW(hFile, path.data(), INITIAL_BUF_SIZE, VOLUME_NAME_DOS);
+	if (size == 0) {
 		CxbxKrnlCleanup("CxbxGetPartitionNumberFromHandle Failed:\nUnable to determine path for HANDLE 0x%08X", hFile);
 	}
 
-	std::string bufferString(buffer);
-	std::string partitionString = "\\Partition";
-	std::string partitionNumberString = bufferString.substr(bufferString.find(partitionString) + partitionString.length(), 1);
+	// If the function fails because lpszFilePath is too small to hold the string plus the terminating null character,
+	// the return value is the required buffer size, in TCHARs. This value includes the size of the terminating null character.
+	if (size >= INITIAL_BUF_SIZE) {
+		path.resize(size);
+		size = GetFinalPathNameByHandleW(hFile, path.data(), size, VOLUME_NAME_DOS);
+	}
+	path.resize(size);
 
-	// atoi returns 0 on non-numeric characters, so we don't need to error check here
-	return atoi(partitionNumberString.c_str());
+	return path;
 }
 
-std::string CxbxGetPartitionDataPathFromHandle(HANDLE hFile)
+int CxbxGetPartitionNumberFromHandle(HANDLE hFile)
 {
 	// Get which partition number is being accessed, by parsing the filename and extracting the last portion 
-	char buffer[MAX_PATH] = {0};
-	if (!GetFinalPathNameByHandle(hFile, buffer, MAX_PATH, VOLUME_NAME_DOS)) {
-		CxbxKrnlCleanup("CxbxGetPartitionDataPathFromHandle Failed:\nUnable to determine path for HANDLE 0x%08X", hFile);
-	}
+	const std::wstring path = CxbxGetFinalPathNameByHandle(hFile);
 
-	std::string bufferString(buffer);
-	std::string partitionString = "\\Partition";
-	std::string partitionPath = bufferString.substr(0, bufferString.find(partitionString) + partitionString.length() + 1);
+	const std::wstring_view partitionString = L"\\Partition";
+	const std::wstring partitionNumberString = path.substr(path.find(partitionString) + partitionString.length(), 1);
+
+	// wcstol returns 0 on non-numeric characters, so we don't need to error check here
+	return wcstol(partitionNumberString.c_str(), nullptr, 0);
+}
+
+std::wstring CxbxGetPartitionDataPathFromHandle(HANDLE hFile)
+{
+	// Get which partition number is being accessed, by parsing the filename and extracting the last portion 
+	const std::wstring path = CxbxGetFinalPathNameByHandle(hFile);
+
+	const std::wstring_view partitionString = L"\\Partition";
+	const std::wstring partitionPath = path.substr(0, path.find(partitionString) + partitionString.length() + 1);
 	return partitionPath;
 }
 
 void CxbxFormatPartitionByHandle(HANDLE hFile)
 {
-	std::string partitionPath = CxbxGetPartitionDataPathFromHandle(hFile);
+	const std::wstring partitionPath = CxbxGetPartitionDataPathFromHandle(hFile);
 
 	// Sanity check, make sure we are actually deleting something within the Cxbx-Reloaded folder
-	if (partitionPath.find("Cxbx-Reloaded") == std::string::npos) {
+	if (partitionPath.find(L"\\Cxbx-Reloaded\\") == std::string::npos) {
 		EmuLog(LOG_LEVEL::WARNING, "Attempting to format a path that is not within a Cxbx-Reloaded data folder... Ignoring!\n");
 		return;
 	}
@@ -176,17 +188,12 @@ void CxbxFormatPartitionByHandle(HANDLE hFile)
 
 	// Format the partition, by iterating through the contents and removing all files/folders within
 	// Previously, we deleted and re-created the folder, but that caused permission issues for some users
-	try
-	{
-		for (auto& directoryEntry : std::filesystem::recursive_directory_iterator(partitionPath)) {
-			std::filesystem::remove_all(directoryEntry);
+	std::error_code er;
+	for (const auto& directoryEntry : std::filesystem::directory_iterator(partitionPath, er)) {
+		if (!er) {
+			std::filesystem::remove_all(directoryEntry, er);
 		}
 	}
-	catch (std::filesystem::filesystem_error fsException)
-	{
-		printf("std::filesystem failed with message: %s\n", fsException.what());
-	}
-
 
 	printf("Formatted EmuDisk Partition%d\n", CxbxGetPartitionNumberFromHandle(hFile));
 }
@@ -256,9 +263,39 @@ EmuHandle::EmuHandle(EmuNtObject* ntObject)
 	NtObject = ntObject;
 }
 
+std::unordered_set<EmuHandle*> EmuHandle::EmuHandleLookup = {};
+std::shared_mutex EmuHandle::EmuHandleLookupLock = {};
+
+EmuHandle* EmuHandle::CreateEmuHandle(EmuNtObject* ntObject) {
+	auto emuHandle = new EmuHandle(ntObject);
+
+	// Register EmuHandle
+	{
+		std::unique_lock scopedLock(EmuHandleLookupLock);
+		EmuHandleLookup.insert(emuHandle);
+	}
+
+	return emuHandle;
+}
+
 NTSTATUS EmuHandle::NtClose()
 {
-	return NtObject->NtClose();
+	auto status = NtObject->NtClose();
+
+	// Unregister the handle
+	if (status == STATUS_SUCCESS) {
+		std::unique_lock scopedLock(EmuHandleLookupLock);
+		EmuHandleLookup.erase(this);
+	}
+
+	return status;
+}
+
+bool EmuHandle::IsEmuHandle(HANDLE Handle)
+{
+	std::shared_lock scopedLock(EmuHandleLookupLock);
+	auto iter = EmuHandleLookup.find((EmuHandle*) Handle);
+	return !(iter == EmuHandleLookup.end());
 }
 
 NTSTATUS EmuHandle::NtDuplicateObject(PHANDLE TargetHandle, DWORD Options)
@@ -275,7 +312,7 @@ EmuNtObject::EmuNtObject()
 HANDLE EmuNtObject::NewHandle()
 {
 	RefCount++;
-	return EmuHandleToHandle(new EmuHandle(this));
+	return EmuHandle::CreateEmuHandle(this);
 }
 
 NTSTATUS EmuNtObject::NtClose()
@@ -291,21 +328,6 @@ EmuNtObject* EmuNtObject::NtDuplicateObject(DWORD Options)
 {
 	RefCount++;
 	return this;
-}
-
-bool IsEmuHandle(HANDLE Handle)
-{
-	return ((uint32_t)Handle > 0x80000000) && ((uint32_t)Handle < 0xFFFFFFFE);
-}
-
-EmuHandle* HandleToEmuHandle(HANDLE Handle)
-{
-	return (EmuHandle*)((uint32_t)Handle & 0x7FFFFFFF);
-}
-
-HANDLE EmuHandleToHandle(EmuHandle* emuHandle)
-{
-	return (HANDLE)((uint32_t)emuHandle | 0x80000000);
 }
 
 std::wstring string_to_wstring(std::string const & src)
@@ -752,8 +774,9 @@ EmuNtSymbolicLinkObject* FindNtSymbolicLinkObjectByRootHandle(const HANDLE Handl
 
 void _CxbxPVOIDDeleter(PVOID *ptr)
 {
-	if (*ptr)
-		g_VMManager.Deallocate((VAddr)*ptr);
+	if (*ptr) {
+		xbox::ExFreePool(*ptr);
+	}
 }
 
 // ----------------------------------------------------------------------------
@@ -771,7 +794,7 @@ NtDll::FILE_LINK_INFORMATION * _XboxToNTLinkInfo(xbox::FILE_LINK_INFORMATION *xb
 
 	// Build the native FILE_LINK_INFORMATION struct
 	*Length = sizeof(NtDll::FILE_LINK_INFORMATION) + convertedFileName.size() * sizeof(wchar_t);
-	NtDll::FILE_LINK_INFORMATION *ntLinkInfo = (NtDll::FILE_LINK_INFORMATION *) g_VMManager.AllocateZeroed(*Length);
+	NtDll::FILE_LINK_INFORMATION *ntLinkInfo = (NtDll::FILE_LINK_INFORMATION *)xbox::ExAllocatePool(*Length);
 	ntLinkInfo->ReplaceIfExists = xboxLinkInfo->ReplaceIfExists;
 	ntLinkInfo->RootDirectory = RootDirectory;
 	ntLinkInfo->FileNameLength = convertedFileName.size() * sizeof(wchar_t);
@@ -791,7 +814,7 @@ NtDll::FILE_RENAME_INFORMATION * _XboxToNTRenameInfo(xbox::FILE_RENAME_INFORMATI
 
 	// Build the native FILE_RENAME_INFORMATION struct
 	*Length = sizeof(NtDll::FILE_RENAME_INFORMATION) + convertedFileName.size() * sizeof(wchar_t);
-	NtDll::FILE_RENAME_INFORMATION *ntRenameInfo = (NtDll::FILE_RENAME_INFORMATION *) g_VMManager.AllocateZeroed(*Length);
+	NtDll::FILE_RENAME_INFORMATION *ntRenameInfo = (NtDll::FILE_RENAME_INFORMATION *)xbox::ExAllocatePool(*Length);
 	ntRenameInfo->ReplaceIfExists = xboxRenameInfo->ReplaceIfExists;
 	ntRenameInfo->RootDirectory = RootDirectory;
 	ntRenameInfo->FileNameLength = convertedFileName.size() * sizeof(wchar_t);

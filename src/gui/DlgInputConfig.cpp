@@ -98,7 +98,7 @@ void UpdateInputOpt(HWND hwnd)
 
 void ShowInputConfig(HWND hwnd, HWND ChildWnd)
 {
-	g_InputDeviceManager.Initialize(true);
+	g_InputDeviceManager.Initialize(true, hwnd);
 	g_ChildWnd = ChildWnd;
 
 	// Show dialog box
@@ -195,7 +195,8 @@ INT_PTR CALLBACK DlgInputConfigProc(HWND hWndDlg, UINT uMsg, WPARAM wParam, LPAR
 				switch (DeviceType)
 				{
 				case to_underlying(XBOX_INPUT_DEVICE::MS_CONTROLLER_DUKE): 
-				case to_underlying(XBOX_INPUT_DEVICE::MS_CONTROLLER_S): {
+				case to_underlying(XBOX_INPUT_DEVICE::MS_CONTROLLER_S):
+				case to_underlying(XBOX_INPUT_DEVICE::ARCADE_STICK): {
 					DialogBoxParam(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_XID_DUKE_CFG), hWndDlg, DlgXidControllerConfigProc,
 						(DeviceType << 8) | port);
 				}

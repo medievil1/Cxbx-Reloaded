@@ -1398,7 +1398,7 @@ __declspec(noreturn) void CxbxKrnlInit
 
 		// Assign the running Xbe path, so it can be accessed via the kernel thunk 'XeImageFileName' :
 		xbox::XeImageFileName.MaximumLength = MAX_PATH;
-		xbox::XeImageFileName.Buffer = (PCHAR)g_VMManager.Allocate(MAX_PATH);
+		xbox::XeImageFileName.Buffer = (PCHAR)xbox::ExAllocatePool(MAX_PATH);
 		sprintf(xbox::XeImageFileName.Buffer, "%c:\\%s", CxbxDefaultXbeDriveLetter, fileName.c_str());
 		xbox::XeImageFileName.Length = (USHORT)strlen(xbox::XeImageFileName.Buffer);
 		EmuLogInit(LOG_LEVEL::INFO, "XeImageFileName = %s", xbox::XeImageFileName.Buffer);
@@ -1418,7 +1418,7 @@ __declspec(noreturn) void CxbxKrnlInit
 			EmuLogInit(LOG_LEVEL::INFO, "XBE TitleID : %s", FormatTitleId(g_pCertificate->dwTitleId).c_str());
 			EmuLogInit(LOG_LEVEL::INFO, "XBE TitleID (Hex) : 0x%s", titleIdHex.str().c_str());
 			EmuLogInit(LOG_LEVEL::INFO, "XBE Version : 1.%02d", g_pCertificate->dwVersion);
-			EmuLogInit(LOG_LEVEL::INFO, "XBE TitleName : %ls", g_pCertificate->wszTitleName);
+			EmuLogInit(LOG_LEVEL::INFO, "XBE TitleName : %.40ls", g_pCertificate->wsTitleName);
 			EmuLogInit(LOG_LEVEL::INFO, "XBE Region : %s", CxbxKrnl_Xbe->GameRegionToString());
 		}
 
@@ -1497,7 +1497,7 @@ __declspec(noreturn) void CxbxKrnlInit
 	// Read Xbox video mode from the SMC, store it in HalBootSMCVideoMode
 	xbox::HalReadSMBusValue(SMBUS_ADDRESS_SYSTEM_MICRO_CONTROLLER, SMC_COMMAND_AV_PACK, FALSE, (xbox::PULONG)&xbox::HalBootSMCVideoMode);
 
-	g_InputDeviceManager.Initialize(false);
+	g_InputDeviceManager.Initialize(false, g_hEmuWindow);
 
 	// Now the hardware devices exist, couple the EEPROM buffer to it's device
 	g_EEPROM->SetEEPROM((uint8_t*)EEPROM);

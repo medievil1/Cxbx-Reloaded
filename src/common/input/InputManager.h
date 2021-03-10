@@ -44,6 +44,7 @@ inline XBOX_INPUT_DEVICE input_support_list[] = {
 	XBOX_INPUT_DEVICE::MS_CONTROLLER_DUKE,
 	XBOX_INPUT_DEVICE::MS_CONTROLLER_S,
 	XBOX_INPUT_DEVICE::STEEL_BATTALION_CONTROLLER,
+	XBOX_INPUT_DEVICE::ARCADE_STICK,
 };
 
 #pragma pack(1)
@@ -123,7 +124,7 @@ CXBX_CONTROLLER_HOST_BRIDGE, *PCXBX_CONTROLLER_HOST_BRIDGE;
 class InputDeviceManager
 {
 public:
-	void Initialize(bool is_gui);
+	void Initialize(bool is_gui, HWND hwnd);
 	void Shutdown();
 	// read/write the input/output from/to the device attached to the supplied xbox port
 	bool UpdateXboxPortInput(int usb_port, void* Buffer, int Direction, int xid_type);
@@ -169,6 +170,8 @@ private:
 	std::thread m_PollingThread;
 	// used to indicate that the manager is shutting down
 	bool m_bPendingShutdown;
+	// handle of the rendering or the input gui window
+	HWND m_hwnd;
 };
 
 extern InputDeviceManager g_InputDeviceManager;

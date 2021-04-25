@@ -336,6 +336,16 @@ void InitSoftwareInterrupts()
 }
 #endif
 
+void TriggerPendingConnectedInterrupts()
+{
+	for (int i = 0; i < MAX_BUS_INTERRUPT_LEVEL; i++) {
+		// If the interrupt is pending and connected, process it
+		if (HalSystemInterrupts[i].IsPending() && EmuInterruptList[i] && EmuInterruptList[i]->Connected) {
+			HalSystemInterrupts[i].Trigger(EmuInterruptList[i]);
+		}
+	}
+}
+
 static xbox::void_xt NTAPI CxbxKrnlInterruptThread(xbox::PVOID param)
 {
 	CxbxSetThreadName("CxbxKrnl Interrupts");
@@ -1409,7 +1419,7 @@ static void CxbxrKrnlInitHacks()
 		CxbxrKrnlAbortEx(LOG_PREFIX_INIT, "Unable to intialize ObInitSystem.");
 	}
 	xbox::KiInitSystem();
-	
+
 	// initialize graphics
 	EmuLogInit(LOG_LEVEL::DEBUG, "Initializing render window.");
 	CxbxInitWindow(true);
@@ -1568,7 +1578,7 @@ void CxbxrKrnlSuspendThreads()
 
 	// Don't use EmuKeGetPcr because that asserts kpcr
 	xbox::KPCR* Pcr = reinterpret_cast<xbox::PKPCR>(__readfsdword(TIB_ArbitraryDataSlot));
-	
+
 	// If there's nothing in list entry, skip this step.
 	if (!ThreadListEntry) {
 		return;

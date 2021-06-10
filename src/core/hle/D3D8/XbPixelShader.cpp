@@ -782,12 +782,12 @@ std::string GetD3DTASumString(int d3dta, bool allowModifier = true) {
 
 // TODO we have to create and cache shaders over and over and over and over
 // Deduplicate this resource management
-IDirect3DPixelShader9* GetFixedFunctionShader()
+IDirect3DPixelShader* GetFixedFunctionShader()
 {
 	using namespace FixedFunctionPixelShader;
 
 	// TODO move this cache elsewhere - and flush it when the device is released!
-	static std::unordered_map<uint64_t, IDirect3DPixelShader9*> ffPsCache = {};
+	static std::unordered_map<uint64_t, IDirect3DPixelShader*> ffPsCache = {};
 
 	// Create a key from state that will be baked in to the shader
 	PsTextureHardcodedState states[4] = {};
@@ -945,7 +945,7 @@ IDirect3DPixelShader9* GetFixedFunctionShader()
 	EmuCompileShader(finalShader, "ps_3_0", &pShaderBlob, pseudoSourceFile.c_str());
 
 	// Create shader object for the device
-	IDirect3DPixelShader9* pShader = nullptr;
+	IDirect3DPixelShader* pShader = nullptr;
 	auto hRet = g_pD3DDevice->CreatePixelShader((DWORD*)pShaderBlob->GetBufferPointer(), &pShader);
 	if (hRet != S_OK)
 		CxbxrAbort("Failed to compile fixed function pixel shader");
@@ -1011,7 +1011,7 @@ void DxbxUpdateActivePixelShader() // NOPATCH
 
   const xbox::X_D3DPIXELSHADERDEF *pPSDef = g_pXbox_PixelShader != nullptr ? (xbox::X_D3DPIXELSHADERDEF*)(XboxRenderStates.GetPixelShaderRenderStatePointer()) : nullptr;
   if (pPSDef == nullptr) {
-	IDirect3DPixelShader9* pShader = nullptr;
+	IDirect3DPixelShader* pShader = nullptr;
 	if (g_UseFixedFunctionPixelShader) {
 		pShader = GetFixedFunctionShader();
 		UpdateFixedFunctionPixelShaderState();

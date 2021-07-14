@@ -632,7 +632,13 @@ PSH_RECOMPILED_SHADER CxbxRecompilePixelShader(CxbxPSDef &CompletePSDef)
 	if (pShader) {
 		DWORD *pFunction = (DWORD*)pShader->GetBufferPointer();
 		if (pFunction) {
-			DWORD hRet = g_pD3DDevice->CreatePixelShader(pFunction, &(Result.ConvertedPixelShader));
+			DWORD hRet = g_pD3DDevice->CreatePixelShader(
+				pFunction,
+#ifdef CXBX_USE_D3D11
+				pShader->GetBufferSize(), // BytecodeLength
+				nullptr, // pClassLinkage
+#endif
+				&(Result.ConvertedPixelShader));
 			if (hRet != D3D_OK) {
 				printf(D3DErrorString(hRet));
 			}
@@ -946,7 +952,13 @@ IDirect3DPixelShader* GetFixedFunctionShader()
 
 	// Create shader object for the device
 	IDirect3DPixelShader* pShader = nullptr;
-	auto hRet = g_pD3DDevice->CreatePixelShader((DWORD*)pShaderBlob->GetBufferPointer(), &pShader);
+	auto hRet = g_pD3DDevice->CreatePixelShader(
+		(_9_11(DWORD *, const void*))pShaderBlob->GetBufferPointer(),
+#ifdef CXBX_USE_D3D11
+		pShaderBlob->GetBufferSize(), // BytecodeLength
+		nullptr, // pClassLinkage
+#endif
+		&pShader);
 	if (hRet != S_OK)
 		CxbxrAbort("Failed to compile fixed function pixel shader");
 	pShaderBlob->Release();
@@ -1017,7 +1029,15 @@ void DxbxUpdateActivePixelShader() // NOPATCH
 		UpdateFixedFunctionPixelShaderState();
 	}
 
+#ifdef CXBX_USE_D3D11
+	g_pD3DDeviceContext->PSSetShader(
+		pShader,
+		nullptr, // ppClassInstances
+		0 // NumClassInstances
+		);
+#else
     g_pD3DDevice->SetPixelShader(pShader);
+#endif
     return;
   }
 
@@ -1051,7 +1071,15 @@ void DxbxUpdateActivePixelShader() // NOPATCH
   Microsoft::WRL::ComPtr<IDirect3DPixelShader> CurrentPixelShader;
   g_pD3DDevice->GetPixelShader(/*out*/CurrentPixelShader.GetAddressOf());
   if (CurrentPixelShader.Get() != RecompiledPixelShader->ConvertedPixelShader) {
+#ifdef CXBX_USE_D3D11
+    g_pD3DDeviceContext->PSSetShader(
+      RecompiledPixelShader->ConvertedPixelShader,
+      nullptr, // ppClassInstances
+      0 // NumClassInstances
+      );
+#else
     g_pD3DDevice->SetPixelShader(RecompiledPixelShader->ConvertedPixelShader);
+#endif
   }
 
   //PS_TEXTUREMODES psTextureModes[xbox::X_D3DTS_STAGECOUNT];

@@ -148,10 +148,10 @@ enum VSH_MAC { // Dxbx note : MAC stands for 'Multiply And Accumulate' opcodes
 };
 
 enum VSH_IMD_DEST_TYPE {
-	IMD_OUTPUT_C,
-	IMD_OUTPUT_R,
-	IMD_OUTPUT_O,
-	IMD_OUTPUT_A0X
+	IMD_DEST_C,
+	IMD_DEST_R,
+	IMD_DEST_O,
+	IMD_DEST_A0X
 };
 
 typedef struct {
@@ -204,7 +204,7 @@ enum VSH_IMD_OREG_SOURCE {
 // Up to two operations (MAC and ILU)
 // Writes to up to 3 destination registers
 // One dest per op + one output register
-typedef struct _VSH_IMD_INSTR {
+typedef struct {
 	VSH_IMD_MAC_OP MAC;
 	VSH_IMD_ILU_OP ILU;
 
@@ -216,7 +216,7 @@ typedef struct _VSH_IMD_INSTR {
 	bool IndexesWithA0_X;
 } VSH_IMD_INSTR;
 
-typedef struct _IntermediateVertexShader {
+typedef struct {
 	std::vector<VSH_IMD_INSTR> Instructions;
 } IntermediateVertexShader;
 

@@ -586,18 +586,18 @@ namespace XboxVertexShaderDecoder
 		int16_t C = ConvertCRegister(VshGetField(pShaderToken, FLD_CONST));
 
 		// Check if there's a MAC opcode
-		if (MAC > MAC_NOP && MAC <= MAC_ARL) {
+		if (MAC != MAC_NOP && MAC <= MAC_ARL) {
 			MacOp.Opcode = MAC;
 
 			if (bIsPaired && RAddress == 1) {
 				// Ignore paired MAC opcodes that write to R1
 			}
 			else if (MAC == MAC_ARL) {
-				MacOp.Dest.Type = IMD_OUTPUT_A0X;
+				MacOp.Dest.Type = IMD_DEST_A0X;
 				MacOp.Dest.Mask = MASK_X;
 			}
 			else {
-				MacOp.Dest.Type = IMD_OUTPUT_R;
+				MacOp.Dest.Type = IMD_DEST_R;
 				MacOp.Dest.Address = RAddress;
 				MacOp.Dest.Mask = VshGetField(pShaderToken, FLD_OUT_MAC_MASK);
 			}
@@ -619,7 +619,7 @@ namespace XboxVertexShaderDecoder
 		if (ILU != ILU_NOP) {
 			// Paired ILU opcodes will only write to R1
 			IluOp.Opcode = ILU;
-			IluOp.Dest.Type = IMD_OUTPUT_R;
+			IluOp.Dest.Type = IMD_DEST_R;
 			IluOp.Dest.Address = bIsPaired ? 1 : RAddress;
 			IluOp.Dest.Mask = VshGetField(pShaderToken, FLD_OUT_ILU_MASK);
 			IluOp.Parameter = VshGetIntermediateParam(pShaderToken, FLD_C_MUX, FLD_C_NEG, CR, V, C);
@@ -630,11 +630,11 @@ namespace XboxVertexShaderDecoder
 		int16_t OutputAddress = VshGetField(pShaderToken, FLD_OUT_ADDRESS);
 		VSH_IMD_DEST_TYPE OutputType;
 		if ((VSH_OUTPUT_TYPE)VshGetField(pShaderToken, FLD_OUT_ORB) == OUTPUT_C) {
-			OutputType = IMD_OUTPUT_C;
+			OutputType = IMD_DEST_C;
 			OutputAddress = ConvertCRegister(OutputAddress);
 		}
 		else { // OUTPUT_O:
-			OutputType = IMD_OUTPUT_O;
+			OutputType = IMD_DEST_O;
 			OutputAddress = OutputAddress & 0xF;
 		}
 

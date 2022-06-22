@@ -11,26 +11,24 @@
 
 extern const char* g_vs_model = vs_model_3_0;
 
-// HLSL generation
-void OutputHlsl(std::stringstream& hlsl, VSH_IMD_OUTPUT& dest)
-{
+void DestRegisterHlsl(std::stringstream& hlsl, VSH_IMD_DEST& dest) {
 	static const char* OReg_Name[/*VSH_OREG_NAME*/] = {
-		"oPos",
-		"???",
-		"???",
-		"oD0",
-		"oD1",
-		"oFog",
-		"oPts",
-		"oB0",
-		"oB1",
-		"oT0",
-		"oT1",
-		"oT2",
-		"oT3",
-		"???",
-		"???",
-		"a0.x"
+	"oPos",
+	"???",
+	"???",
+	"oD0",
+	"oD1",
+	"oFog",
+	"oPts",
+	"oB0",
+	"oB1",
+	"oT0",
+	"oT1",
+	"oT2",
+	"oT3",
+	"???",
+	"???",
+	"a0.x"
 	};
 
 	switch (dest.Type) {
@@ -54,7 +52,10 @@ void OutputHlsl(std::stringstream& hlsl, VSH_IMD_OUTPUT& dest)
 		assert(false);
 		break;
 	}
+}
 
+void DestMaskHlsl(std::stringstream& hlsl, VSH_IMD_DEST& dest)
+{
 	// Write the mask as a separate argument to the opcode defines
 	// (No space, so that "dest,mask, ..." looks close to "dest.mask, ...")
 	hlsl << ",";
@@ -92,7 +93,7 @@ void ParameterHlsl(std::stringstream& hlsl, VSH_IMD_PARAMETER& param, bool Index
 		hlsl << "-";
 	}
 
-	if (param.ParameterType == PARAM_C) {
+	if (param.Type == PARAM_C) {
 		// Access constant registers through our HLSL c() function,
 		// which allows dumping negative indices (like Xbox shaders),
 		// and which returns zero when out-of-bounds indices are passed in:
@@ -112,7 +113,7 @@ void ParameterHlsl(std::stringstream& hlsl, VSH_IMD_PARAMETER& param, bool Index
 		}
 	}
 	else {
-		hlsl << RegisterName[param.ParameterType] << param.Address;
+		hlsl << RegisterName[param.Type] << param.Address;
 	}
 
 	// Write the swizzle if we need to
@@ -175,25 +176,101 @@ void BuildShader(IntermediateVertexShader* pShader, std::stringstream& hlsl)
 		/*ILU_LIT:*/"x_lit" // = 7 - all values of the 3 bits are used
 	};
 
-	for (size_t i = 0; i < pShader->Instructions.size(); i++) {
-		VSH_INTERMEDIATE_FORMAT& IntermediateInstruction = pShader->Instructions[i];
+	auto WriteOp = [&](
+		const std::string& opcode,
+		VSH_IMD_DEST dest,
+		int paramCount, VSH_IMD_PARAMETER* params,
+		bool indexesWithA0_X,
+		bool useTempForOutput
+	) {
+		// opcode(dest, a, b, c);
+		hlsl << "\n  " << opcode << "(";
 
-		std::string str;
-		if (IntermediateInstruction.MAC > MAC_NOP) {
-			str = VSH_MAC_HLSL[IntermediateInstruction.MAC];
+		if (useTempForOutput) {
+			hlsl << "temp";
 		}
 		else {
-			str = VSH_ILU_HLSL[IntermediateInstruction.ILU];
-		}
+			DestRegisterHlsl(hlsl, dest);
+		};
+		DestMaskHlsl(hlsl, dest);
 
-		hlsl << "\n  " << str << "("; // opcode
-		OutputHlsl(hlsl, IntermediateInstruction.Output);
-		for (unsigned i = 0; i < IntermediateInstruction.ParamCount; i++) {
+		for (int i = 0; i < paramCount; i++) {
 			hlsl << ", ";
-			ParameterHlsl(hlsl, IntermediateInstruction.Parameters[i], IntermediateInstruction.IndexesWithA0_X);
+			ParameterHlsl(hlsl, params[i], indexesWithA0_X);
 		}
 
 		hlsl << ");";
+	};
+
+	for (size_t i = 0; i < pShader->Instructions.size(); i++) {
+		VSH_IMD_INSTR& in = pShader->Instructions[i];
+
+		// Paired if both MAC and ILU write to a dest register
+		bool isPaired =
+			in.MAC.Opcode != MAC_NOP &&
+			in.ILU.Opcode != ILU_NOP &&
+			(in.MAC.Dest.Mask || in.ORegSource == SRC_MAC) &&
+			(in.ILU.Dest.Mask || in.ORegSource == SRC_ILU);
+
+		// If there are two "paired" instructions that need to run "simultaneously",
+		// we need to prevent the output of the first instruction interfering
+		// with the input of the second instruction
+		// If the MAC output is the same as the ILU input
+		// we will store it in a temp variable until the ILU has run
+		bool needTemp = false;
+		VSH_IMD_DEST tempValue;
+		if (isPaired) {
+			if (in.MAC.Dest.Address == in.ILU.Parameter.Address &&
+				(in.MAC.Dest.Type == IMD_OUTPUT_C   && in.ILU.Parameter.Type == PARAM_C ||
+				 in.MAC.Dest.Type == IMD_OUTPUT_R   && in.ILU.Parameter.Type == PARAM_R ||
+				 in.MAC.Dest.Type == IMD_OUTPUT_A0X && in.ILU.Parameter.Type == PARAM_C && in.IndexesWithA0_X)) {
+				// Normal MAC output matches ILU input
+				needTemp = true;
+				tempValue = in.MAC.Dest;
+			}
+			else if (in.ORegSource == SRC_MAC &&
+				     in.ORegDest.Type == IMD_OUTPUT_O && in.ORegDest.Address == 0 &&
+					 in.ILU.Parameter.Type == PARAM_R && in.ILU.Parameter.Address == 12) {
+				// OReg MAC output matches ILU input
+				// Note oPos is the same as r12
+				needTemp = true;
+				tempValue = in.ORegDest;
+			}
+		}
+
+		if (needTemp) {
+			// Write the MAC output to a temp
+			hlsl << "\n  " << "temp = ";
+			DestRegisterHlsl(hlsl, tempValue);
+			hlsl << ";";
+		}
+
+		// Write MAC op
+		if (in.MAC.Opcode != MAC_NOP) {
+			if (in.MAC.Dest.Mask) {
+				WriteOp(VSH_MAC_HLSL[in.MAC.Opcode], in.MAC.Dest, in.MAC.ParamCount, in.MAC.Parameters, in.IndexesWithA0_X, needTemp);
+			}
+			if (in.ORegSource == SRC_MAC && in.ORegDest.Mask) {
+				WriteOp(VSH_MAC_HLSL[in.MAC.Opcode], in.ORegDest, in.MAC.ParamCount, in.MAC.Parameters, in.IndexesWithA0_X, false);
+			}
+		}
+
+		// Write ILU op
+		if (in.ILU.Opcode != ILU_NOP) {
+			if (in.ILU.Dest.Mask) {
+				WriteOp(VSH_ILU_HLSL[in.ILU.Opcode], in.ILU.Dest, 1, &in.ILU.Parameter, in.IndexesWithA0_X, false);
+			}
+			if (in.ORegSource == SRC_ILU && in.ORegDest.Mask) {
+				WriteOp(VSH_ILU_HLSL[in.ILU.Opcode], in.ORegDest, 1, &in.ILU.Parameter, in.IndexesWithA0_X, false);
+			}
+		}
+
+		if (needTemp) {
+			// Now the ILU op has executed, write temp to the MAC output
+			hlsl << "\n  ";
+			DestRegisterHlsl(hlsl, tempValue);
+			hlsl << " = temp;";
+		}
 	}
 }
 

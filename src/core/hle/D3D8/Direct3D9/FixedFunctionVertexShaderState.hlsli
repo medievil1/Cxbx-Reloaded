@@ -35,6 +35,9 @@ namespace FixedFunctionVertexShader {
     const float FOG_TABLE_EXP = 1;
     const float FOG_TABLE_EXP2 = 2;
     const float FOG_TABLE_LINEAR = 3;
+    const float FOG_TABLE_LINEAR_ABS = 4;
+    const float FOG_TABLE_EXP_ABS = 5;
+    const float FOG_TABLE_EXP2_ABS = 7;
 }
 
 // Shared HLSL structures
@@ -133,6 +136,7 @@ struct Fog {
     alignas(16) float Density; // EXP fog density
     alignas(16) float Start; // LINEAR fog start
     alignas(16) float End; // LINEAR fog end
+    alignas(16) float Mode;
 };
 
 // Vertex lighting

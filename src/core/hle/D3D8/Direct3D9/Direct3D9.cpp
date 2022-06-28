@@ -6320,9 +6320,11 @@ void UpdateFixedFunctionVertexShaderState()
 			ffShaderState.Fog.DepthMode = FixedFunctionVertexShader::FOG_DEPTH_W;
 		}
 
+		auto fogMode = (enum VshFogMode)GET_MASK(HLE_read_NV2A_pgraph_register(NV_PGRAPH_CONTROL_3), NV_PGRAPH_CONTROL_3_FOG_MODE);
 		auto density = XboxRenderStates.GetXboxRenderState(X_D3DRS_FOGDENSITY);
 		auto fogStart = XboxRenderStates.GetXboxRenderState(X_D3DRS_FOGSTART);
 		auto fogEnd = XboxRenderStates.GetXboxRenderState(X_D3DRS_FOGEND);
+		ffShaderState.Fog.Mode =  *reinterpret_cast<float*>(&fogMode);
 		ffShaderState.Fog.Density = *reinterpret_cast<float*>(&density);
 		ffShaderState.Fog.Start = *reinterpret_cast<float*>(&fogStart);
 		ffShaderState.Fog.End = *reinterpret_cast<float*>(&fogEnd);
@@ -7449,12 +7451,18 @@ void CxbxUpdateHostVertexShaderConstants()
 	}
 
 	// Placed this here until we find a better place
-	const uint32_t fogTableMode = XboxRenderStates.GetXboxRenderState(xbox::_X_D3DRENDERSTATETYPE::X_D3DRS_FOGTABLEMODE);
+	auto pg = &(g_NV2A->GetDeviceState()->pgraph);
+	 uint32_t fogTableMode = XboxRenderStates.GetXboxRenderState(xbox::_X_D3DRENDERSTATETYPE::X_D3DRS_FOGTABLEMODE);
 	const float fogDensity = XboxRenderStates.GetXboxRenderStateAsFloat(xbox::_X_D3DRENDERSTATETYPE::X_D3DRS_FOGDENSITY);
 	const float fogStart = XboxRenderStates.GetXboxRenderStateAsFloat(xbox::_X_D3DRENDERSTATETYPE::X_D3DRS_FOGSTART);
 	const float fogEnd = XboxRenderStates.GetXboxRenderStateAsFloat(xbox::_X_D3DRENDERSTATETYPE::X_D3DRS_FOGEND);
+	 uint32_t fogMode = (enum VshFogMode)GET_MASK(pg->regs[NV_PGRAPH_CONTROL_3], NV_PGRAPH_CONTROL_3_FOG_MODE);
+	
 	float fogStuff[4] = { (float)fogTableMode, fogDensity, fogStart, fogEnd };
+	float fogModeAbs[1] = { (float)fogMode };
 	g_pD3DDevice->SetVertexShaderConstantF(CXBX_D3DVS_CONSTREG_FOGINFO, fogStuff, 1);
+	g_pD3DDevice->SetVertexShaderConstantF(CXBX_D3DVS_CONSTREG_FOGMODE, fogModeAbs, 1);
+	
 }
 
 void CxbxUpdateHostViewport() {

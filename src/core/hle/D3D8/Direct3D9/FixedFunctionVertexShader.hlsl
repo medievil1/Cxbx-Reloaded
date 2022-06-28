@@ -291,16 +291,26 @@ float DoFog(const VS_INPUT xIn)
 
     // Calculate the fog factor
     // Some of this might be better done in the pixel shader?
+	const float FOG_LINEAR_ABS       = 4;
+	const float FOG_EXP_ABS          = 5;
+	const float FOG_EXP2_ABS         = 7;
     float fogFactor;
-    if (state.Fog.TableMode == FixedFunctionVertexShader::FOG_TABLE_NONE)
+	float Depth = fogDepth;
+    if (state.Fog.TableMode == FixedFunctionVertexShader::FOG_TABLE_NONE){
         fogFactor = fogDepth;
-    if (state.Fog.TableMode == FixedFunctionVertexShader::FOG_TABLE_EXP)
+		}
+    if (state.Fog.TableMode == FixedFunctionVertexShader::FOG_TABLE_EXP){
+		fogDepth = (state.Fog.Mode == FOG_EXP_ABS) ? abs(Depth) : Depth;
         fogFactor = 1 / exp(fogDepth * state.Fog.Density); // 1 / e^(d * density)
-    if (state.Fog.TableMode == FixedFunctionVertexShader::FOG_TABLE_EXP2)
+		}
+    if (state.Fog.TableMode == FixedFunctionVertexShader::FOG_TABLE_EXP2){
+		fogDepth = (state.Fog.Mode == FOG_EXP2_ABS) ? abs(Depth) : Depth;
         fogFactor = 1 / exp(pow(fogDepth * state.Fog.Density, 2)); // 1 / e^((d * density)^2)
-    if (state.Fog.TableMode == FixedFunctionVertexShader::FOG_TABLE_LINEAR)
+		}
+    if (state.Fog.TableMode == FixedFunctionVertexShader::FOG_TABLE_LINEAR){
+		fogDepth = (state.Fog.Mode == FOG_LINEAR_ABS) ? abs(Depth) : Depth;
         fogFactor = (state.Fog.End - fogDepth) / (state.Fog.End - state.Fog.Start); // (end - d) / (end - start)
-
+	    }
     return fogFactor;
 }
 

@@ -39,6 +39,7 @@ uniform float4 xboxTextureScale[4] : register(c214);
 
 // Parameters for mapping the shader's fog output value to a fog factor
 uniform float4  CxbxFogInfo: register(c218); // = CXBX_D3DVS_CONSTREG_FOGINFO
+uniform float4  CxBxFogMode: register(c219);
 
 // Overloaded casts, assuring all inputs are treated as float4
 float4 _tof4(float  src) { return float4(src, src, src, src); }
@@ -289,6 +290,19 @@ float4 reverseScreenspaceTransform(float4 oPos)
 	return oPos;
 }
 
+// Clean up values before they go to the PS
+// FIXME On hw it appears NaN becomes 1 or 0 depending
+// on the sign bit, which might require bitwise ops in SM4+
+float4 clean(float4 x)
+{
+	// Convert NaN into 1
+	// Note IsNaN() just gets optimized away...
+	// https://shader-playground.timjones.io/0bbe04704caddadb52cd4134daab8ac3
+	// Test case: Otogi does math ops on -NaN
+	// which seems to become +NaN -> +1 in the PS
+    return (x < 0.f || x > 0.f || x == 0.f) ? x : 1;
+}
+
 VS_OUTPUT main(const VS_INPUT xIn)
 {
 	// Output variables
@@ -323,6 +337,9 @@ VS_OUTPUT main(const VS_INPUT xIn)
 	init_v( 8); init_v( 9); init_v(10); init_v(11);
 	init_v(12); init_v(13); init_v(14); init_v(15);
 
+	// Temp variable for paired VS instruction
+	float4 temp;
+
 	// Xbox shader program)DELIMITER", /* This terminates the header raw string" // */
 
 R"DELIMITER(
@@ -332,39 +349,52 @@ R"DELIMITER(
 
 	// Fogging
 	// TODO deduplicate
-	const float fogDepth      =   oFog.x; // Don't abs this value! Test-case : DolphinClassic xdk sample
-	const float fogTableMode  =   CxbxFogInfo.x;
-	const float fogDensity    =   CxbxFogInfo.y;
-	const float fogStart      =   CxbxFogInfo.z;
-	const float fogEnd        =   CxbxFogInfo.w;  
+	      
+	      float Depth         =   oFog.x; // Don't abs this value! Test-case : DolphinClassic xdk sample
+		  float fogTableMode  =   CxbxFogInfo.x;
+	      float fogDensity    =   CxbxFogInfo.y;
+	      float fogStart      =   CxbxFogInfo.z;
+	      float fogEnd        =   CxbxFogInfo.w; 
+		  float fogMode 	  =   CxBxFogMode.x;
+		  float fogDepth	  =   Depth;
 
-	const float FOG_TABLE_NONE    = 0;
-	const float FOG_TABLE_EXP     = 1;
-	const float FOG_TABLE_EXP2    = 2;
-	const float FOG_TABLE_LINEAR  = 3;
+	const float FOG_TABLE_NONE       = 0;
+	const float FOG_TABLE_EXP        = 1;
+	const float FOG_TABLE_EXP2       = 2;
+	const float FOG_TABLE_LINEAR     = 3;
+	const float FOG_LINEAR_ABS       = 4;
+	const float FOG_EXP_ABS          = 5;
+	const float FOG_EXP2_ABS         = 7;
  
     float fogFactor;
-    if(fogTableMode == FOG_TABLE_NONE) 
+    if(fogTableMode == FOG_TABLE_NONE) {
        fogFactor = fogDepth;
-    if(fogTableMode == FOG_TABLE_EXP) 
+	  }
+    if(fogTableMode == FOG_TABLE_EXP) {
+	fogDepth = (fogMode = FOG_EXP_ABS) ? abs(fogDepth) : fogDepth;
        fogFactor = 1 / exp(fogDepth * fogDensity); /* / 1 / e^(d * density)*/
-    if(fogTableMode == FOG_TABLE_EXP2) 
+	   }
+    if(fogTableMode == FOG_TABLE_EXP2) {
+	fogDepth = (fogMode = FOG_EXP2_ABS) ? abs(fogDepth) : fogDepth;
        fogFactor = 1 / exp(pow(fogDepth * fogDensity, 2)); /* / 1 / e^((d * density)^2)*/
-    if(fogTableMode == FOG_TABLE_LINEAR) 
-       fogFactor = (fogEnd - fogDepth) / (fogEnd - fogStart);
-       
-	xOut.oPos = reverseScreenspaceTransform(oPos);
+	   }
+    if(fogTableMode == FOG_TABLE_LINEAR){
+       fogDepth = (fogMode = FOG_LINEAR_ABS) ? abs(Depth) : Depth;
+		fogFactor = (fogEnd - fogDepth) / (fogEnd - fogStart);
+      }
+			
+	xOut.oPos  = reverseScreenspaceTransform(oPos);
 	xOut.oD0 = saturate(oD0);
 	xOut.oD1 = saturate(oD1);
-	xOut.oFog = fogFactor; // Note : Xbox clamps fog in pixel shader -> *NEEDS TESTING* /was oFog.x 
-	xOut.oPts = oPts.x;
+	xOut.oFog = clean(fogFactor).x; // Note : Xbox clamps fog in pixel shader -> *NEEDS TESTING* /was oFog.x 
+	xOut.oPts = clean(oPts.x).x;
 	xOut.oB0 = saturate(oB0);
 	xOut.oB1 = saturate(oB1);
-	// Scale textures (TODO : or should we apply this to the input register values?)
-	xOut.oT0 = oT0 / xboxTextureScale[0];
-	xOut.oT1 = oT1 / xboxTextureScale[1];
-	xOut.oT2 = oT2 / xboxTextureScale[2];
-	xOut.oT3 = oT3 / xboxTextureScale[3];
+	// Scale textures
+	xOut.oT0 = clean(oT0 / xboxTextureScale[0]);
+	xOut.oT1 = clean(oT1 / xboxTextureScale[1]);
+	xOut.oT2 = clean(oT2 / xboxTextureScale[2]);
+	xOut.oT3 = clean(oT3 / xboxTextureScale[3]);
 
 	return xOut;
 }

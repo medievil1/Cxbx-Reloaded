@@ -48,13 +48,20 @@ uniform const float4 c_fog : register(c18); // Note : Maps to PSH_XBOX_CONSTANT_
 // Constant registers used only in final combiner stage (xfc 'opcode') :
 uniform const float4 FC0 : register(c16); // Note : Maps to PSH_XBOX_CONSTANT_FC0, must be generated as argument to xfc instead of C0
 uniform const float4 FC1 : register(c17); // Note : Maps to PSH_XBOX_CONSTANT_FC1, must be generated as argument to xfc instead of C1
-uniform const float4 BEM[4] : register(c19); // Note : PSH_XBOX_CONSTANT_BEM for 4 texture stages
-uniform const float4 LUM[4] : register(c23); // Note : PSH_XBOX_CONSTANT_LUM for 4 texture stages
-uniform const float  FRONTFACE_FACTOR : register(c27); // Note : PSH_XBOX_CONSTANT_LUM for 4 texture stages
+// TODO : Use struct PsTextureStageState (declared in FixedFunctionPixelShader.hlsli) instead of these :
+
+// Texture color sign
+uniform const float4 COLORSIGN[4] : register(c19); // Note : PSH_XBOX_CONSTANT_COLORSIGN for 4 texture stages
+// Bump environment mapping
+uniform const float4 BEM[4] : register(c23); // Note : PSH_XBOX_CONSTANT_BEM for 4 texture stages
+uniform const float4 LUM[4] : register(c27); // Note : PSH_XBOX_CONSTANT_LUM for 4 texture stages
+
+uniform const float  FRONTFACE_FACTOR : register(c31); // Note : PSH_XBOX_CONSTANT_LUM for 4 texture stages
 
 
 #define CM_LT(c) if(c < 0) clip(-1); // = PS_COMPAREMODE_[RSTQ]_LT
 #define CM_GE(c) if(c >= 0) clip(-1); // = PS_COMPAREMODE_[RSTQ]_GE
+
 
 #if 0
    // Compiler-defines/symbols which must be defined when their bit/value is set in the corresponding register :
@@ -111,7 +118,7 @@ uniform const float  FRONTFACE_FACTOR : register(c27); // Note : PSH_XBOX_CONSTA
 #ifdef PS_COMBINERCOUNT_MUX_MSB
 	#define FCS_MUX (r0.a >= 0.5) // Check r0.a MSB; Having range upto 1 this should be equal to : (((r0.a * 255) /*mod 256*/) >= 128)
 #else // PS_COMBINERCOUNT_MUX_LSB
-	#define FCS_MUX (((r0.a * 255) mod 2) >= 1) // Check r0.b LSB; Get LSB by converting 1 into 255 (highest 8-bit value) and using modulo 2. TODO : Verify correctness
+	#define FCS_MUX (((r0.a * 255) % 2) >= 1) // Check r0.b LSB; Get LSB by converting 1 into 255 (highest 8-bit value) and using modulo 2. TODO : Verify correctness
 #endif
 
 // PS_FINALCOMBINERSETTING_COMPLEMENT_V1, when defined, applies a modifier to the v1 input when calculating the sum register
@@ -134,17 +141,16 @@ uniform const float  FRONTFACE_FACTOR : register(c27); // Note : PSH_XBOX_CONSTA
 #else
 	#define FCS_SUM s_ident // otherwise identity mapping. TODO : Confirm correctness
 #endif
-
+#define xdot(s0, s1) dot((s0).rgb, (s1).rgb)
 // Xbox supports only one 'pixel shader' opcode, but bit flags tunes it's function;
 // Here, effective all 5 Xbox opcodes, extended with a variable macro {xop_m(m,...)} for destination modifier :
 // Note : Since both d0 AND d1 could be the same output register, calculation of d2 can re-use only one (d0 or d1)
 #define xmma(d0, d1, d2,  s0, s1, s2, s3, m, tmp) tmp = d0 = m(s0 * s1); d1 = m(s2 * s3); d2 =           d1 + tmp // PS_COMBINEROUTPUT_AB_CD_SUM=           0x00L, // 3rd output is AB+CD
 #define xmmc(d0, d1, d2,  s0, s1, s2, s3, m, tmp) tmp = d0 = m(s0 * s1); d1 = m(s2 * s3); d2 = FCS_MUX ? d1 : tmp // PS_COMBINEROUTPUT_AB_CD_MUX=           0x04L, // 3rd output is MUX(AB,CD) based on R0.a
 
-#define xdm(d0, d1,  s0, s1, s2, s3, m) d0 = m(dot(s0 , s1)); d1 = m(    s2 * s3 )                                // PS_COMBINEROUTPUT_AB_DOT_PRODUCT=      0x02L, // RGB only // PS_COMBINEROUTPUT_CD_MULTIPLY=         0x00L,
-#define xdd(d0, d1,  s0, s1, s2, s3, m) d0 = m(dot(s0 , s1)); d1 = m(dot(s2 , s3))                                // PS_COMBINEROUTPUT_CD_DOT_PRODUCT=      0x01L, // RGB only // PS_COMBINEROUTPUT_AB_MULTIPLY=         0x00L, 
-#define xmd(d0, d1,  s0, s1, s2, s3, m) d0 = m(    s0 * s1 ); d1 = m(dot(s2 , s3))                                // PS_COMBINEROUTPUT_AB_DOT_PRODUCT=      0x02L, // RGB only // PS_COMBINEROUTPUT_CD_MULTIPLY=         0x01L,
-
+#define xdm(d0, d1,  s0, s1, s2, s3, m)  d0 = m(xdot(s0 , s1)); d1 = m(     s2 * s3)                              // PS_COMBINEROUTPUT_AB_DOT_PRODUCT=      0x02L, // RGB only // PS_COMBINEROUTPUT_CD_MULTIPLY=         0x00L,
+#define xdd(d0, d1,  s0, s1, s2, s3, m) d0 = m(xdot(s0 , s1)); d1 = m(xdot(s2 , s3))                              // PS_COMBINEROUTPUT_CD_DOT_PRODUCT=      0x01L, // RGB only // PS_COMBINEROUTPUT_AB_MULTIPLY=         0x00L, 
+#define xmd(d0, d1,  s0, s1, s2, s3, m) d0 = m(     s0 * s1 ); d1 = m(xdot(s2 , s3))                              // PS_COMBINEROUTPUT_AB_DOT_PRODUCT=      0x02L, // RGB only // PS_COMBINEROUTPUT_CD_MULTIPLY=         0x01L,
 // After the register combiner stages, there's one (optional) final combiner step, consisting of 4 parts;
 // All the 7 final combiner inputs operate on rgb only and clamp negative input to zero:
 #define fcin(r) saturate(r)
@@ -217,13 +223,59 @@ sampler samplers[4] : register(s0);
 	#define ALPHAKILL {false, false, false, false}
 #endif
 static bool alphakill[4] = ALPHAKILL;
+#if 1 // TODO : Move these (and other) helper functions to a (potentially pre-compiled) hlsl(i) file, to be shared with FixedFunctionPixelShader.hlsl
+static const float4 WarningColor = float4(0, 1, 1, 1); // Returned when unhandled scenario is encountered
+#define unsigned_to_signed(x) (((x) * 2) - 1) // Shifts range from [0..1] to [-1..1] (just like s_bx2)
+#define signed_to_unsigned(x) (((x) + 1) / 2) // Shifts range from [-1..1] to [0..1]
+float4 PerformColorSign(const float4 ColorSign, float4 t)
+{
+	// Per color channel, based on the ColorSign setting :
+	// either keep the value range as-is (when ColorSign is zero)
+	// or convert from [0..1] to [-1..+1] (when ColorSign is more than zero, often used for bumpmaps),
+	// or convert from [-1..1] to [0..1] (when ColorSign is less than zero):
+	if (ColorSign.r > 0) t.r = unsigned_to_signed(t.r);
+	if (ColorSign.g > 0) t.g = unsigned_to_signed(t.g);
+	if (ColorSign.b > 0) t.b = unsigned_to_signed(t.b);
+	if (ColorSign.a > 0) t.a = unsigned_to_signed(t.a);
+	
+	// TODO : Instead of the above, create a mirror texture with a host format that has identical component layout, but with all components signed.
+	// Then, in here, when any component has to be read as signed, sample the signed texture (ouch : with what dimension and coordinate?!)
+	// and replace the components that we read from the unsigned texture, but which have to be signed, with the signed components read from the signed mirror texture.
+	// This way, texture filtering can still be allowed, as that would be performed separately over the unsigned vs unsigned textures (so no mixing between the two).
 
+	return t;
+}
+float4 PerformColorKeyOp(const float ColorKeyOp, const float4 ColorKeyColor, float4 t)
+{
+	// Handle all D3DTCOLORKEYOP_ modes :
+	if (ColorKeyOp == 0) // = _DISABLE
+		return t; // No color-key checking
+	if (any(t - ColorKeyColor))
+		return t; // Cxbx assumption : On color mismatch, simply return the input. TODO : This might require a more elaborate operation? (Like "when any of the texels were filtered with a non-zero weight", whatever that means)
+	if (ColorKeyOp == 1) // = _ALPHA
+		return float4(t.rgb, 0);
+	if (ColorKeyOp == 2) // = _RGBA
+		return 0;
+	if (ColorKeyOp == 3) // = _KILL
+		discard;
+	// Undefined ColorKeyOp mode
+	return WarningColor;
+}
+void PerformAlphaKill(const float AlphaKill, float4 t)
+{
+	if (AlphaKill)
+		if (t.a == 0)
+			if (t.a == 0)
+				discard;
+	discard;
+}
+#endif
 float4 PostProcessTexel(const int ts, float4 t)
 {
-	if (alphakill[ts])
-		if (t.a == 0)
-			discard;
-
+	// TODO : Figure out in which order the following operations should be performed :
+	//t = PerformColorSign(COLORSIGN[ts], t);
+	// TODO : Enable once the data is available : t = PerformColorKeyOp(COLORKEYOP[ts], COLORKEYCOLOR[ts], t);
+	PerformAlphaKill(alphakill[ts], t);
 	return t;
 }
 
@@ -248,10 +300,10 @@ float4 Sample6F(int ts, float3 s)
 }
 
 // Test-case JSRF (boost-dash effect).
-float3 DoBumpEnv(const float4 TexCoord, const float4 BumpEnvMat, const float4 src)
+float3 DoBumpEnv(const float4 TexCoord, const float4 BumpEnvMat, const float4 BumpMap)
 {
 	// Convert the input bump map (source texture) value range into two's complement signed values (from (0, +1) to (-1, +1), using s_bx2):
-	const float4 BumpMap = s_bx2(src); // Note : medieval discovered s_bias improved JSRF, PatrickvL changed it into s_bx2 thanks to http://www.rastertek.com/dx11tut20.html
+	//const float4 BumpMap = s_bx2(src); // Note : medieval discovered s_bias improved JSRF, PatrickvL changed it into s_bx2 thanks to http://www.rastertek.com/dx11tut20.html
 	// TODO : The above should be removed, and replaced by some form of COLORSIGN handling, which may not be possible inside this pixel shader, because filtering-during-sampling would cause artifacts.
 
 	const float u = TexCoord.x + (BumpEnvMat.x * BumpMap.r) + (BumpEnvMat.z * BumpMap.g); // Or : TexCoord.x + dot(BumpEnvMat.xz, BumpMap.rg)
@@ -267,7 +319,7 @@ float3 DoBumpEnv(const float4 TexCoord, const float4 BumpEnvMat, const float4 sr
 #define t3 t[3]
 
 // Resolve a stage number via 'input texture (index) mapping' to it's corresponding output texture register (rgba?)
-#define src(ts) t[PS_INPUTTEXTURE_[ts]]
+#define src(ts) PerformColorSign(COLORSIGN[ts], t[PS_INPUTTEXTURE_[ts]])
 
 // Calculate the dot result for a given texture stage. Since any given stage is input-mapped to always be less than or equal the stage it appears in, this won't cause read-ahead issues
 // Test case: BumpDemo demo
@@ -280,6 +332,7 @@ float3 DoBumpEnv(const float4 TexCoord, const float4 BumpEnvMat, const float4 sr
 // Test case: Metal Arms (menu skybox clouds, alpha is specifically set in the VS)
 #define Passthru(ts)  float4(saturate(iT[ts]))
 #define Brdf(ts)      float3(t[ts-2].y,  t[ts-1].y,  t[ts-2].x - t[ts-1].x) // TODO : Complete 16 bit phi/sigma retrieval from float4 texture register. Perhaps use CalcHiLo?
+#define Normal(ts)	  float(dot_[ts])
 #define Normal2(ts)   float3(dot_[ts-1], dot_[ts],   0)                     // Preceding and current stage dot result. Will be input for Sample2D.
 #define Normal3(ts)   float3(dot_[ts-2], dot_[ts-1], dot_[ts])              // Two preceding and current stage dot result.
 #define Eye           float3(iT[1].w,    iT[2].w,    iT[3].w)               // 4th (q) component of input texture coordinates 1, 2 and 3. Only used by texm3x3vspec/PS_TEXTUREMODES_DOT_RFLCT_SPEC, always at stage 3. TODO : Map iT[1/2/3] through PS_INPUTTEXTURE_[]?
@@ -300,10 +353,10 @@ float3 DoBumpEnv(const float4 TexCoord, const float4 BumpEnvMat, const float4 sr
 /*--23 texbrdf      */ #define PS_TEXTUREMODES_BRDF(ts)                                               s = Brdf(ts);        v = Sample3D(ts, s); t[ts] = v // TODO : Test (t[ts-2] is 16 bit eyePhi,eyeSigma; t[ts-1] is lightPhi,lightSigma)
 /*--23 texm3x2tex   */ #define PS_TEXTUREMODES_DOT_ST(ts)               CalcDot(ts); n = Normal2(ts); s = n;               v = Sample2D(ts, s); t[ts] = v // TODO : Test
 /*--23 texm3x2depth */ #define PS_TEXTUREMODES_DOT_ZW(ts)               CalcDot(ts); n = Normal2(ts); if (n.y==0) v=1;else v = n.x / n.y;       t[ts] = v // TODO : Make depth-check use result of division, but how?
-/*--2- texm3x3diff  */ #define PS_TEXTUREMODES_DOT_RFLCT_DIFF(ts)       CalcDot(ts); n = Normal3(ts); s = n;               v = Sample6F(ts, s); t[ts] = v // TODO : Test
+/*--2- texm3x3diff  */ #define PS_TEXTUREMODES_DOT_RFLCT_DIFF(ts)       CalcDot(ts); n = Normal(ts);  s = n;               v = Sample6F(ts, s); t[ts] = v // TODO : Test
 /*---3 texm3x3vspec */ #define PS_TEXTUREMODES_DOT_RFLCT_SPEC(ts)       CalcDot(ts); n = Normal3(ts); s = Reflect(n, Eye); v = Sample6F(ts, s); t[ts] = v // TODO : Test
 /*---3 texm3x3tex   */ #define PS_TEXTUREMODES_DOT_STR_3D(ts)           CalcDot(ts); n = Normal3(ts); s = n;               v = Sample3D(ts, s); t[ts] = v // TODO : Test
-/*---3 texm3x3tex   */ #define PS_TEXTUREMODES_DOT_STR_CUBE(ts)         CalcDot(ts); n = Normal3(ts); s = n;               v = Sample6F(ts, s); t[ts] = v // TODO : Test
+/*---3 texm3x3vspec */ #define PS_TEXTUREMODES_DOT_STR_CUBE(ts)         CalcDot(ts); n = Normal3(ts); s = Reflect(n, Eye); v = Sample6F(ts, s); t[ts] = v // TODO : Test
 /*-123 texreg2ar    */ #define PS_TEXTUREMODES_DPNDNT_AR(ts)                                          s = src(ts).arg;     v = Sample2D(ts, s); t[ts] = v // TODO : Test [1]
 /*-123 texreg2bg    */ #define PS_TEXTUREMODES_DPNDNT_GB(ts)                                          s = src(ts).gba;     v = Sample2D(ts, s); t[ts] = v // TODO : Test [1]
 // TODO replace dm with dot_[ts]? Confirm BumpDemo 'Cubemap only' modes

@@ -339,7 +339,7 @@ void BuildShader(DecodedRegisterCombiner* pShader, std::stringstream& hlsl)
 		program_pos += program_key.length();
 		// Cut up the template in 3 parts (header, code and footer) :
 		hlsl_template[0] = hlslTemplate.substr(0, defines_pos);
-		hlsl_template[1] = hlslTemplate.substr(defines_pos + 1, program_pos);
+		hlsl_template[1] = hlslTemplate.substr(defines_pos, program_pos - defines_pos);
 		hlsl_template[2] = hlslTemplate.substr(program_pos + 1);
 	}
 
@@ -390,9 +390,9 @@ void BuildShader(DecodedRegisterCombiner* pShader, std::stringstream& hlsl)
 	OutputDefineFlag(hlsl, pShader->FinalCombiner.ComplementV1, "PS_FINALCOMBINERSETTING_COMPLEMENT_V1");
 	OutputDefineFlag(hlsl, pShader->FinalCombiner.ComplementR0, "PS_FINALCOMBINERSETTING_COMPLEMENT_R0");
 	OutputDefineFlag(hlsl, pShader->FinalCombiner.ClampSum, "PS_FINALCOMBINERSETTING_CLAMP_SUM");
-
+	hlsl << "\n";
 	hlsl << hlsl_template[1];
-
+	hlsl << "\n";
 	// Generate all four texture stages
 	for (unsigned i = 0; i < PSH_XBOX_MAX_T_REGISTER_COUNT; i++) {
 		static const std::string texturemode_str[19] = {

@@ -31,6 +31,7 @@ file(COPY ${CXBXR_GLEW_DLL} DESTINATION  ${TargetRunTimeDir})
 # Copy certain HLSL files to the output directory, which we will load at runtime
 set(CXBXR_HLSL_FILES
 "${CMAKE_SOURCE_DIR}/src/core/hle/D3D8/Direct3D9/FixedFunctionVertexShaderState.hlsli"
+"${CMAKE_SOURCE_DIR}/src/core/hle/D3D8/Direct3D9/CxbxPixelShaderTemplate.hlsl"
 "${CMAKE_SOURCE_DIR}/src/core/hle/D3D8/Direct3D9/FixedFunctionVertexShader.hlsl"
 "${CMAKE_SOURCE_DIR}/src/core/hle/D3D8/Direct3D9/FixedFunctionPixelShader.hlsli"
 "${CMAKE_SOURCE_DIR}/src/core/hle/D3D8/Direct3D9/FixedFunctionPixelShader.hlsl"

@@ -57,7 +57,8 @@ uniform const float4 BEM[4] : register(c23); // Note : PSH_XBOX_CONSTANT_BEM for
 uniform const float4 LUM[4] : register(c27); // Note : PSH_XBOX_CONSTANT_LUM for 4 texture stages
 
 uniform const float  FRONTFACE_FACTOR : register(c31); // Note : PSH_XBOX_CONSTANT_LUM for 4 texture stages
-
+uniform const float COLORKEYOP : register(c32);
+uniform const float4 COLORKEYCOLOR[4] : register(c33);
 
 #define CM_LT(c) if(c < 0) clip(-1); // = PS_COMPAREMODE_[RSTQ]_LT
 #define CM_GE(c) if(c >= 0) clip(-1); // = PS_COMPAREMODE_[RSTQ]_GE
@@ -148,7 +149,7 @@ uniform const float  FRONTFACE_FACTOR : register(c31); // Note : PSH_XBOX_CONSTA
 #define xmma(d0, d1, d2,  s0, s1, s2, s3, m, tmp) tmp = d0 = m(s0 * s1); d1 = m(s2 * s3); d2 =           d1 + tmp // PS_COMBINEROUTPUT_AB_CD_SUM=           0x00L, // 3rd output is AB+CD
 #define xmmc(d0, d1, d2,  s0, s1, s2, s3, m, tmp) tmp = d0 = m(s0 * s1); d1 = m(s2 * s3); d2 = FCS_MUX ? d1 : tmp // PS_COMBINEROUTPUT_AB_CD_MUX=           0x04L, // 3rd output is MUX(AB,CD) based on R0.a
 
-#define xdm(d0, d1,  s0, s1, s2, s3, m)  d0 = m(xdot(s0 , s1)); d1 = m(     s2 * s3)                              // PS_COMBINEROUTPUT_AB_DOT_PRODUCT=      0x02L, // RGB only // PS_COMBINEROUTPUT_CD_MULTIPLY=         0x00L,
+#define xdm(d0, d1,  s0, s1, s2, s3, m) d0 = m(xdot(s0 , s1)); d1 = m(     s2 * s3)                               // PS_COMBINEROUTPUT_AB_DOT_PRODUCT=      0x02L, // RGB only // PS_COMBINEROUTPUT_CD_MULTIPLY=         0x00L,
 #define xdd(d0, d1,  s0, s1, s2, s3, m) d0 = m(xdot(s0 , s1)); d1 = m(xdot(s2 , s3))                              // PS_COMBINEROUTPUT_CD_DOT_PRODUCT=      0x01L, // RGB only // PS_COMBINEROUTPUT_AB_MULTIPLY=         0x00L, 
 #define xmd(d0, d1,  s0, s1, s2, s3, m) d0 = m(     s0 * s1 ); d1 = m(xdot(s2 , s3))                              // PS_COMBINEROUTPUT_AB_DOT_PRODUCT=      0x02L, // RGB only // PS_COMBINEROUTPUT_CD_MULTIPLY=         0x01L,
 // After the register combiner stages, there's one (optional) final combiner step, consisting of 4 parts;
@@ -207,7 +208,7 @@ float m21(const float input)
 #define PS_DOTMAPPING_ZERO_TO_ONE(in)         dm = in.rgb                                          // :r8g8b8a8->(r,g,b):                                                   0x00=>0,                       0xff=>1 thus : output =                     (input / 0xff  )
 #define PS_DOTMAPPING_MINUS1_TO_1_D3D(in)     dm = float3(m21d(in.x), m21d(in.y), m21d(in.z))      // :r8g8b8a8->(r,g,b):               0x00=>-128/127,         0x01=>-1,   0x80=>0,                       0xff=>1 thus : output =                                        ((input - 0x100  ) / 0x7f  )
 #define PS_DOTMAPPING_MINUS1_TO_1_GL(in)      dm = float3(m21g(in.x), m21g(in.y), m21g(in.z))      // :r8g8b8a8->(r,g,b):                                       0x80=>-1,   0x00=>0,                       0x7f=>1 thus : output =  (input < 0x80  ) ? (input / 0x7f  ) : ((input - 0x100  ) / 0x80  ) (see https://en.wikipedia.org/wiki/Two's_complement)
-#define PS_DOTMAPPING_MINUS1_TO_1(in)         dm = float3(m21(in.x),  m21(in.y),  m21(in.z))       // :r8g8b8a8->(r,g,b):               0x80=>-128/127,        ?0x81=>-1,   0x00=>0,                       0x7f=>1 thus : output =  (input < 0x80  ) ? (input / 0x7f  ) : ((input - 0x100  ) / 0x7f  ) (see https://en.wikipedia.org/wiki/Two's_complement)
+#define PS_DOTMAPPING_MINUS1_TO_1(in)         dm = float3(m21 (in.x), m21 (in.y), m21 (in.z))       // :r8g8b8a8->(r,g,b):               0x80=>-128/127,        ?0x81=>-1,   0x00=>0,                       0x7f=>1 thus : output =  (input < 0x80  ) ? (input / 0x7f  ) : ((input - 0x100  ) / 0x7f  ) (see https://en.wikipedia.org/wiki/Two's_complement)
 
 #define PS_DOTMAPPING_HILO_1(in)              CalcHiLo(in); dm = float3(H, L, 1)                   // :H16L16  ->(H,L,1):                                                 0x0000=>0,                     0xffff=>1 thus : output =                     (input / 0xffff)
 #define PS_DOTMAPPING_HILO_HEMISPHERE_D3D(in) CalcHiLo(in); dm = float3(H, L, sqrt(1-(H*H)-(L*L))) // :H16L16  ->(H,L,sqrt(1-H^2-L^2)):?                      0x8000=>-1, 0x0000=>0, 0x7fff=32767/32768            thus : output =                                        ((input - 0x10000) / 0x7fff)
@@ -274,7 +275,7 @@ float4 PostProcessTexel(const int ts, float4 t)
 {
 	// TODO : Figure out in which order the following operations should be performed :
 	//t = PerformColorSign(COLORSIGN[ts], t);
-	// TODO : Enable once the data is available : t = PerformColorKeyOp(COLORKEYOP[ts], COLORKEYCOLOR[ts], t);
+	t = PerformColorKeyOp(COLORKEYOP, COLORKEYCOLOR[ts], t);
 	PerformAlphaKill(alphakill[ts], t);
 	return t;
 }

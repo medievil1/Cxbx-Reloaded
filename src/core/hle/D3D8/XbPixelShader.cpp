@@ -557,11 +557,11 @@ typedef struct s_CxbxPSDef {
 					RC.PSTextureModes[i] = PS_TEXTUREMODES_CUBEMAP;
 				}
 
-				// Test-case: MS-033 Crimson Skies (Plane texturing in-game and selection menu)
-				//if (ActiveTextureTypes[i] == xbox::X_D3DRTYPE_CUBETEXTURE && RC.PSTextureModes[i] == PS_TEXTUREMODES_DOT_STR_3D) {
-					//EmuLog(LOG_LEVEL::WARNING, "DOT_STR_3D sampling is used with a cubemap texture - using DOT_STR_CUBE sampling instead");
-					//RC.PSTextureModes[i] = PS_TEXTUREMODES_DOT_STR_CUBE;
-				//}
+				 //Test-case: MS-033 Crimson Skies (Plane texturing in-game and selection menu)
+				if (ActiveTextureTypes[i] == xbox::X_D3DRTYPE_CUBETEXTURE && RC.PSTextureModes[i] == PS_TEXTUREMODES_DOT_STR_3D) {
+					EmuLog(LOG_LEVEL::WARNING, "DOT_STR_3D sampling is used with a cubemap texture - using DOT_STR_CUBE sampling instead");
+					RC.PSTextureModes[i] = PS_TEXTUREMODES_DOT_STR_CUBE;
+				}
 			}
 		}
 	}
@@ -661,8 +661,12 @@ constexpr int PSH_XBOX_CONSTANT_BEM = PSH_XBOX_CONSTANT_COLORSIGN + 4; // = 23..
 constexpr int PSH_XBOX_CONSTANT_LUM = PSH_XBOX_CONSTANT_BEM + 4; // = 27..30
 // Which winding order to consider as the front face
 constexpr int PSH_XBOX_CONSTANT_FRONTFACE_FACTOR = PSH_XBOX_CONSTANT_LUM + 4; // = 31
+// Color Key Op
+constexpr int PSH_XBOX_CONSTANT_COLORKEY_OP = PSH_XBOX_CONSTANT_FRONTFACE_FACTOR + 1; // = 32
+// Color Key Color
+constexpr int PSH_XBOX_CONSTANT_COLORKEY_COLOR = PSH_XBOX_CONSTANT_COLORKEY_OP + 1; // = 33
 // This concludes the set of constants that need to be set on host :
-constexpr int PSH_XBOX_CONSTANT_MAX = PSH_XBOX_CONSTANT_FRONTFACE_FACTOR + 1; // = 32
+constexpr int PSH_XBOX_CONSTANT_MAX = PSH_XBOX_CONSTANT_COLORKEY_COLOR + 4; // = 37
 
 std::string GetFixedFunctionShaderTemplate()
 // See GetCustomPixelShaderTemplate()
@@ -1023,7 +1027,7 @@ D3DXCOLOR CxbxCalcColorSign(int stage_nr)
 	 DWORD PSTextureModes = XboxRenderStates.GetXboxRenderState(xbox::X_D3DRS_PSTEXTUREMODES);
 	 PS_TEXTUREMODES StageTextureMode = (PS_TEXTUREMODES)((PSTextureModes >> (stage_nr * 5)) & PS_TEXTUREMODES_MASK);
 	 auto Format = g_HostTextureFormats[stage_nr];
-	 if ((StageTextureMode == PS_TEXTUREMODES_BUMPENVMAP ) && (XboxColorSign == 0))
+	 if ((StageTextureMode == PS_TEXTUREMODES_BUMPENVMAP || StageTextureMode == PS_TEXTUREMODES_BUMPENVMAP_LUM) && (XboxColorSign == 0))
 	 {
 		 Bump = true;
 		 //if ((Format == D3DFMT_Q8W8V8U8 || Format == D3DFMT_L6V5U5 || Format == D3DFMT_X8L8V8U8) && (XboxColorSign == 0))  || Format == D3DFMT_X8R8G8B8{
@@ -1054,7 +1058,7 @@ D3DXCOLOR CxbxCalcColorSign(int stage_nr)
 	 bool HostTextureFormatIsSignedForR = (H == D3DFMT_Q8W8V8U8) || (H == D3DFMT_V8U8) || (H == D3DFMT_V16U16) || (H == D3DFMT_X8L8V8U8);
 	 bool HostTextureFormatIsSignedForG = (H == D3DFMT_Q8W8V8U8) || (H == D3DFMT_L6V5U5) || (H == D3DFMT_V8U8) || (H == D3DFMT_V16U16) || (H == D3DFMT_X8L8V8U8);
 	 bool HostTextureFormatIsSignedForB = (H == D3DFMT_Q8W8V8U8) || (H == D3DFMT_L6V5U5);
-#else // New, as experimentally discovered by medievil :
+#endif // New, as experimentally discovered by medievil :
 	// Host format     | Signed components
 	// ----------------+------------------
 	// D3DFMT_Q8W8V8U8 | A,R,G,B
@@ -1065,21 +1069,21 @@ D3DXCOLOR CxbxCalcColorSign(int stage_nr)
 	// TODO : Verify D3DFMT_L6V5U5 indeed maps to A,R (instead of G,B).
 	// If not, research why this (then incorret) change *does* improve both BumpEarth samples
 	// (while keeping BumpLens and JSFR boost dash effect working). Perhaps duplicate signed range conversion in the shader?
-	 bool HostTextureFormatIsSignedForA = (H == D3DFMT_Q8W8V8U8) ;
-	 bool HostTextureFormatIsSignedForR = (H == D3DFMT_Q8W8V8U8) || (H == D3DFMT_L6V5U5) || (H == D3DFMT_V8U8) || (H == D3DFMT_V16U16) || (H == D3DFMT_X8L8V8U8);;
+	 bool HostTextureFormatIsSignedForA = (H == D3DFMT_Q8W8V8U8);
+	 bool HostTextureFormatIsSignedForR = (H == D3DFMT_Q8W8V8U8) || (H == D3DFMT_L6V5U5) || (H == D3DFMT_V8U8) || (H == D3DFMT_V16U16) || (H == D3DFMT_X8L8V8U8);
 	 bool HostTextureFormatIsSignedForG = (H == D3DFMT_Q8W8V8U8) || (H == D3DFMT_L6V5U5) || (H == D3DFMT_V8U8) || (H == D3DFMT_V16U16) || (H == D3DFMT_X8L8V8U8);
-	 bool HostTextureFormatIsSignedForB = (H == D3DFMT_Q8W8V8U8) ;
-#endif
-		 D3DXCOLOR CxbxColorSign[4];
+	 bool HostTextureFormatIsSignedForB = (H == D3DFMT_Q8W8V8U8) || (H == D3DFMT_L6V5U5) || (H == D3DFMT_X8L8V8U8);
+
+		 D3DXCOLOR CxbxColorSign;
 		 //if (stage_nr == -1) stage_nr = 3;
 		
-	 CxbxColorSign[stage_nr].r = CxbxComponentColorSignFromXboxAndHost(XboxColorSign & xbox::X_D3DTSIGN_RSIGNED, HostTextureFormatIsSignedForR, Bump, stage_nr); // Maps to COLORSIGN.r
-	 CxbxColorSign[stage_nr].g = CxbxComponentColorSignFromXboxAndHost(XboxColorSign & xbox::X_D3DTSIGN_GSIGNED, HostTextureFormatIsSignedForG, Bump, stage_nr); // Maps to COLORSIGN.g
-	 CxbxColorSign[stage_nr].b = CxbxComponentColorSignFromXboxAndHost(XboxColorSign & xbox::X_D3DTSIGN_BSIGNED, HostTextureFormatIsSignedForB, Bump, stage_nr); // Maps to COLORSIGN.b
-	 CxbxColorSign[stage_nr].a = CxbxComponentColorSignFromXboxAndHost(XboxColorSign & xbox::X_D3DTSIGN_ASIGNED, HostTextureFormatIsSignedForA, Bump, stage_nr); // Maps to COLORSIGN.a
+	 CxbxColorSign.r = CxbxComponentColorSignFromXboxAndHost(XboxColorSign & xbox::X_D3DTSIGN_RSIGNED, HostTextureFormatIsSignedForR, Bump, stage_nr); // Maps to COLORSIGN.r
+	 CxbxColorSign.g = CxbxComponentColorSignFromXboxAndHost(XboxColorSign & xbox::X_D3DTSIGN_GSIGNED, HostTextureFormatIsSignedForG, Bump, stage_nr); // Maps to COLORSIGN.g
+	 CxbxColorSign.b = CxbxComponentColorSignFromXboxAndHost(XboxColorSign & xbox::X_D3DTSIGN_BSIGNED, HostTextureFormatIsSignedForB, Bump, stage_nr); // Maps to COLORSIGN.b
+	 CxbxColorSign.a = CxbxComponentColorSignFromXboxAndHost(XboxColorSign & xbox::X_D3DTSIGN_ASIGNED, HostTextureFormatIsSignedForA, Bump, stage_nr); // Maps to COLORSIGN.a
 
 	
-	 return CxbxColorSign[stage_nr];
+	 return CxbxColorSign;
 }
 
 // Set constant state for the fixed function pixel shader
@@ -1096,11 +1100,13 @@ void UpdateFixedFunctionPixelShaderState()
 	for (int i = 0; i < xbox::X_D3DTS_STAGECOUNT; i++) {
 		auto stage = &ffPsState.stages[i];
 		stage->COLORKEYOP = (float)XboxTextureStates.Get(i, xbox::X_D3DTSS_COLORKEYOP);
+		stage->COLORKEYCOLOR = (D3DXVECTOR4)((D3DXCOLOR)(XboxTextureStates.Get(i, xbox::X_D3DTSS_COLORKEYCOLOR)));
 		auto CxbxColorSign = CxbxCalcColorSign(i);
 		stage->COLORSIGN.x = CxbxColorSign.r;
 		stage->COLORSIGN.y = CxbxColorSign.g;
 		stage->COLORSIGN.z = CxbxColorSign.b;
 		stage->COLORSIGN.w = CxbxColorSign.a;
+		
 		stage->ALPHAKILL = (float)XboxTextureStates.Get(i, xbox::X_D3DTSS_ALPHAKILL);
 		stage->BUMPENVMAT00 = AsFloat(XboxTextureStates.Get(i, xbox::X_D3DTSS_BUMPENVMAT00));
 		stage->BUMPENVMAT01 = AsFloat(XboxTextureStates.Get(i, xbox::X_D3DTSS_BUMPENVMAT01));
@@ -1108,7 +1114,7 @@ void UpdateFixedFunctionPixelShaderState()
 		stage->BUMPENVMAT11 = AsFloat(XboxTextureStates.Get(i, xbox::X_D3DTSS_BUMPENVMAT11));
 		stage->BUMPENVLSCALE = AsFloat(XboxTextureStates.Get(i, xbox::X_D3DTSS_BUMPENVLSCALE));
 		stage->BUMPENVLOFFSET = AsFloat(XboxTextureStates.Get(i, xbox::X_D3DTSS_BUMPENVLOFFSET));
-		stage->COLORKEYCOLOR = (D3DXVECTOR4)((D3DXCOLOR)(XboxTextureStates.Get(i, xbox::X_D3DTSS_COLORKEYCOLOR)));
+		
 	}
 
 	const int size = (sizeof(FixedFunctionPixelShaderState) + 16 - 1) / 16;
@@ -1193,8 +1199,9 @@ void DxbxUpdateActivePixelShader() // NOPATCH
   D3DXCOLOR fColor[PSH_XBOX_CONSTANT_MAX];
 
   // PSH_XBOX_CONSTANT_C0..C15 are stored as-is in (and should thus be read from) the Xbox render state pixel shader constant slots
+#define bx2(x) (((x) * 2) - 1)
   for (unsigned constant_nr = 0; constant_nr < 16; constant_nr++) {
-    fColor[PSH_XBOX_CONSTANT_C0 + constant_nr] = XboxRenderStates.GetXboxRenderState(xbox::X_D3DRS_PSCONSTANT0_0 + constant_nr); // Note : 0xAARRGGBB format
+    fColor[PSH_XBOX_CONSTANT_C0 + constant_nr] = (XboxRenderStates.GetXboxRenderState(xbox::X_D3DRS_PSCONSTANT0_0 + constant_nr)); // Note : 0xAARRGGBB format
   }
 
   fColor[PSH_XBOX_CONSTANT_FC0] = XboxRenderStates.GetXboxRenderState(xbox::X_D3DRS_PSFINALCOMBINERCONSTANT0);
@@ -1208,11 +1215,14 @@ void DxbxUpdateActivePixelShader() // NOPATCH
   // Texture color sign
   for (int stage_nr = 0; stage_nr < xbox::X_D3DTS_STAGECOUNT; stage_nr++) {
     fColor[PSH_XBOX_CONSTANT_COLORSIGN + stage_nr] = CxbxCalcColorSign(stage_nr);
+	fColor[PSH_XBOX_CONSTANT_COLORKEY_OP].r = (float)XboxTextureStates.Get(stage_nr, xbox::X_D3DTSS_COLORKEYOP);
+	fColor[PSH_XBOX_CONSTANT_COLORKEY_COLOR + stage_nr] = ((D3DXCOLOR)(XboxTextureStates.Get(stage_nr, xbox::X_D3DTSS_COLORKEYCOLOR)));
   }
 
 #if 0 // New, doesn't work yet
   // Bump Environment Material registers
   for (int stage_nr = 0; stage_nr < xbox::X_D3DTS_STAGECOUNT; stage_nr++) {
+	  
     // Note : No loop, because X_D3DTSS_BUMPENVMAT11 and X_D3DTSS_BUMPENVMAT10 are swapped
     fColor[PSH_XBOX_CONSTANT_BEM + stage_nr].r = XboxTextureStates.Get(stage_nr, xbox::X_D3DTSS_BUMPENVMAT00); // Maps to BEM[stage].x
     fColor[PSH_XBOX_CONSTANT_BEM + stage_nr].g = XboxTextureStates.Get(stage_nr, xbox::X_D3DTSS_BUMPENVMAT01); // Maps to BEM[stage].y

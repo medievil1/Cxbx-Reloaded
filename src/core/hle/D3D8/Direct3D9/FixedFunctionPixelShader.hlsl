@@ -17,10 +17,7 @@ float4 PerformColorSign(const float4 ColorSign, float4 t)
 	if (ColorSign.g > 0) t.g = unsigned_to_signed(t.g);
 	if (ColorSign.b > 0) t.b = unsigned_to_signed(t.b);
 	if (ColorSign.a > 0) t.a = unsigned_to_signed(t.a);
-	if (ColorSign.r < 0) t.r = signed_to_unsigned(t.r);
-	if (ColorSign.g < 0) t.g = signed_to_unsigned(t.g);
-	if (ColorSign.b < 0) t.b = signed_to_unsigned(t.b);
-	if (ColorSign.a < 0) t.a = signed_to_unsigned(t.a);
+	
 	// TODO : Instead of the above, create a mirror texture with a host format that has identical component layout, but with all components signed.
 	// Then, in here, when any component has to be read as signed, sample the signed texture (ouch : with what dimension and coordinate?!)
 	// and replace the components that we read from the unsigned texture, but which have to be signed, with the signed components read from the signed mirror texture.
@@ -229,6 +226,7 @@ TextureArgs ExecuteTextureStage(
 
 	// Sample the texture
 	float4 t;
+	t = PerformColorSign(stage.COLORSIGN, t);
 	int type = TextureSampleType[i];
 	if (type == SAMPLE_NONE)
 		t = 1; // Test case JSRF
@@ -246,7 +244,8 @@ TextureArgs ExecuteTextureStage(
 	}
 
 	// TODO : Figure out in which order the following operations should be performed :
-	t = PerformColorSign(stage.COLORSIGN, t);
+	
+	//t = PerformColorKeyOp(stage.COLORKEYOP, stage.COLORKEYCOLOR, t);
 	t = PerformColorKeyOp(stage.COLORKEYOP, stage.COLORKEYCOLOR, t);
 	PerformAlphaKill(stage.ALPHAKILL, t);
 

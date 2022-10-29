@@ -1168,23 +1168,23 @@ void SetHostResource(xbox::X_D3DResource* pXboxResource, IDirect3DResource* pHos
 		D3DSURFACE_DESC surfaceDesc;
 		D3DVOLUME_DESC volumeDesc;
 		UINT Level = 0; // TODO : When should Level every be something other than zero, and if so : what other value?
-		switch (resourceInfo.dwXboxResourceType) {// TODO : Better check pHostResource class type
-		case xbox::X_D3DRTYPE_SURFACE:
+		switch (pHostResource->GetType()) {// TODO : Better check pHostResource class type
+		case D3DRTYPE_SURFACE:
 			hRet = ((IDirect3DSurface*)pHostResource)->GetDesc(&surfaceDesc);
 			break;
-		case xbox::X_D3DRTYPE_TEXTURE:
+		case D3DRTYPE_TEXTURE:
 			hRet = ((IDirect3DTexture*)pHostResource)->GetLevelDesc(Level, &surfaceDesc);
 			break;
-		case xbox::X_D3DRTYPE_VOLUMETEXTURE: {
+		case D3DRTYPE_VOLUMETEXTURE: {
 			hRet = ((IDirect3DVolumeTexture*)pHostResource)->GetLevelDesc(Level, &volumeDesc);
 			break; }
-		case xbox::X_D3DRTYPE_CUBETEXTURE:
+		case D3DRTYPE_CUBETEXTURE:
 			hRet = ((IDirect3DCubeTexture*)pHostResource)->GetLevelDesc(Level, &surfaceDesc);
 			break;
 		}
 
 		if (SUCCEEDED(hRet)) {
-			PCFormat = (resourceInfo.dwXboxResourceType == xbox::X_D3DRTYPE_VOLUMETEXTURE) ? volumeDesc.Format : surfaceDesc.Format;
+			PCFormat = (pHostResource->GetType() == D3DRTYPE_VOLUMETEXTURE) ? volumeDesc.Format : surfaceDesc.Format;
 		}
 	}
 

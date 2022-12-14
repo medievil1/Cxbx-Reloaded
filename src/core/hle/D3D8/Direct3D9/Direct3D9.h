@@ -1291,8 +1291,8 @@ xbox::void_xt WINAPI EMUPATCH(D3DDevice_SetRenderState_ShadowFunc)
 // ******************************************************************
 xbox::void_xt WINAPI EMUPATCH(D3DDevice_SetTransform)
 (
-	xbox::X_D3DTRANSFORMSTATETYPE State,
-    CONST D3DMATRIX      *pMatrix
+	X_D3DTRANSFORMSTATETYPE State,
+    CONST X_D3DMATRIX      *pMatrix
 );
 
 xbox::void_xt WINAPI EMUPATCH(D3DDevice_SetTransform_0__LTCG_eax1_edx2)();
@@ -1302,8 +1302,8 @@ xbox::void_xt WINAPI EMUPATCH(D3DDevice_SetTransform_0__LTCG_eax1_edx2)();
 // ******************************************************************
 xbox::void_xt WINAPI EMUPATCH(D3DDevice_MultiplyTransform)
 (
-	xbox::X_D3DTRANSFORMSTATETYPE State,
-	CONST D3DMATRIX      *pMatrix
+	X_D3DTRANSFORMSTATETYPE State,
+	CONST X_D3DMATRIX      *pMatrix
 );
 
 // ******************************************************************
@@ -1311,8 +1311,8 @@ xbox::void_xt WINAPI EMUPATCH(D3DDevice_MultiplyTransform)
 // ******************************************************************
 xbox::void_xt WINAPI EMUPATCH(D3DDevice_GetTransform)
 (
-    D3DTRANSFORMSTATETYPE State,
-    D3DMATRIX            *pMatrix
+    X_D3DTRANSFORMSTATETYPE State,
+    X_D3DMATRIX             *pMatrix
 );
 
 // ******************************************************************
@@ -1869,7 +1869,7 @@ xbox::hresult_xt WINAPI EMUPATCH(D3DDevice_DrawTriPatch)
 // ******************************************************************
 xbox::void_xt WINAPI EMUPATCH(D3DDevice_GetProjectionViewportMatrix)
 (
-	D3DXMATRIX *pProjectionViewport
+	X_D3DMATRIX *pProjectionViewport
 );
 
 // ******************************************************************
@@ -1974,9 +1974,9 @@ xbox::void_xt WINAPI EMUPATCH(D3DDevice_DeleteStateBlock)
 // ******************************************************************
 xbox::void_xt WINAPI EMUPATCH(D3DDevice_SetModelView)
 (
-	CONST D3DMATRIX *pModelView, 
-	CONST D3DMATRIX *pInverseModelView, 
-	CONST D3DMATRIX *pComposite
+	CONST X_D3DMATRIX *pModelView,
+	CONST X_D3DMATRIX *pInverseModelView,
+	CONST X_D3DMATRIX *pComposite
 );
 
 // ******************************************************************
@@ -2005,7 +2005,10 @@ PDWORD WINAPI EMUPATCH(XMETAL_StartPush)(void* Unknown);
 // ******************************************************************
 // * patch: D3DDevice_GetModelView
 // ******************************************************************
-xbox::hresult_xt WINAPI EMUPATCH(D3DDevice_GetModelView)(D3DXMATRIX* pModelView);
+xbox::hresult_xt WINAPI EMUPATCH(D3DDevice_GetModelView)
+(
+    X_D3DMATRIX* pModelView
+);
 
 // ******************************************************************
 // * patch: D3DDevice_SetBackMaterial

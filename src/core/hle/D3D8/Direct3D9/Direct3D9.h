@@ -717,7 +717,7 @@ xbox::void_xt WINAPI EMUPATCH(D3DDevice_SetVertexData4s)
 xbox::void_xt WINAPI EMUPATCH(D3DDevice_SetVertexDataColor)
 (
     int_xt      Register,
-    D3DCOLOR    Color
+    X_D3DCOLOR  Color
 );
 
 // ******************************************************************
@@ -742,8 +742,8 @@ xbox::void_xt WINAPI EMUPATCH(D3DDevice_Clear)
     dword_xt                  Count,
     CONST X_D3DRECT          *pRects,
     dword_xt                  Flags,
-    D3DCOLOR               Color,
-    float                  Z,
+    X_D3DCOLOR                Color,
+    float                     Z,
     dword_xt                  Stencil
 );
 
@@ -971,7 +971,7 @@ xbox::void_xt WINAPI EMUPATCH(D3DDevice_UpdateOverlay)
     CONST X_RECT *SrcRect,
     CONST X_RECT *DstRect,
     bool_xt       EnableColorKey,
-    D3DCOLOR      ColorKey
+    X_D3DCOLOR    ColorKey
 );
 
 // ******************************************************************
@@ -1563,15 +1563,15 @@ xbox::void_xt WINAPI EMUPATCH(D3DDevice_SetSoftDisplayFilter)
 // ******************************************************************
 xbox::void_xt WINAPI EMUPATCH(D3DPalette_Lock)
 (
-    X_D3DPalette   *pThis,
-    D3DCOLOR      **ppColors,
+    X_D3DPalette      *pThis,
+    X_D3DCOLOR       **ppColors,
     dword_xt           Flags
 );
 
 // ******************************************************************
 // * patch: IDirect3DPalette8_Lock2
 // ******************************************************************
-D3DCOLOR * WINAPI EMUPATCH(D3DPalette_Lock2)
+xbox::X_D3DCOLOR * WINAPI EMUPATCH(D3DPalette_Lock2)
 (
     X_D3DPalette   *pThis,
     dword_xt           Flags

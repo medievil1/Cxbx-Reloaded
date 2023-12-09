@@ -3305,27 +3305,29 @@ DWORD* HLE_PushPrepare(X_D3DAPI_ENUM hleAPI, int dword_count)
 {
 	DWORD* pPush_local;
 	DWORD* pPush_limit;
-
-	if (g_pXbox_pPush == nullptr) {
+	
+	
+	//if (g_pXbox_pPush == nullptr) {
 		// Init g_pXbox_pPush and g_pXbox_pPushLimit when not done yet.
-		HLE_PushInit();
+		
 		// When the Xbox pushbuffer is located, cause redo (no risk of endless recursion as this happens only once)
-		if (g_pXbox_pPush != nullptr)
+		if (g_pXbox_pPush != nullptr){
+			pPush_local = (DWORD*)*g_pXbox_pPush;         //pointer to current pushbuffer
+			pPush_limit = (DWORD*)*g_pXbox_pPushLimit;    //pointer to the end of current pushbuffer		
+			
+		}
+		else {
+			// Since it's possible to reach here where there's no Xbox push buffer yet,
+			// just write to temporary buffer (effectively ignoring the command).
+			pPush_local = &InitialPushBuffer[0];
+			pPush_limit = &InitialPushBuffer[MaxInitialPushDwords - 1];
+			HLE_PushInit();
 			return HLE_PushPrepare(hleAPI, dword_count);
-
-		// Since it's possible to reach here where there's no Xbox push buffer yet,
-		// just write to temporary buffer (effectively ignoring the command).
-		pPush_local = &InitialPushBuffer[0];
-		pPush_limit = &InitialPushBuffer[MaxInitialPushDwords - 1];
-		// Note : Since MaxInitialPushDwords is set higher than any possible input
-		// dword_count, the below code won't call into CxbxrImpl_MakeSpace, which
-		// would otherwise crash due to g_pXbox_D3DDevice still being nullptr here!
-	}
-	else {
-		pPush_local = (DWORD*)*g_pXbox_pPush;         //pointer to current pushbuffer
-		pPush_limit = (DWORD*)*g_pXbox_pPushLimit;    //pointer to the end of current pushbuffer
-	}
-
+			// Note : Since MaxInitialPushDwords is set higher than any possible input
+			// dword_count, the below code won't call into CxbxrImpl_MakeSpace, which
+			// would otherwise crash due to g_pXbox_D3DDevice still being nullptr here!
+		}
+	//}	
 	DWORD* pPush_end = pPush_local + dword_count;
 
 	// TODO : Try if just 'pPush_end > pPush_limit' works as well

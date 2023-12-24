@@ -4266,9 +4266,9 @@ int pgraph_handle_method(
                     if (pg->KelvinPrimitive.SetBeginEnd == NV097_SET_BEGIN_END_OP_END) {
                         //we're out side of Begin/End block, should be setting fix function vertex shader color persist attribute value
                         // 4 bytes for each float
-                        slot = (method - NV097_SET_VERTEX_DATA2F_M) / 4;
-                        // we have 2 floats for each slot
-                        slot /= 2;
+                        slot = (method - NV097_SET_VERTEX_DATA4F_M) / 4;
+                        // we have 4 floats for each slot
+                        slot /= 4;
 
                         // preserve persist color value in R/G/B/A float4 format in KelvinPrimitive.SetVertexData4f[slot]
                         // D3DCOLOR format persiste in KelvinPrimitive.SetVertexData4ub[slot]

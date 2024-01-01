@@ -4815,8 +4815,8 @@ int pgraph_handle_method(
                         if (method_count==2){
                             // dirty hack. for program shader, there will be a NV097_SET_TRANSFORM_PROGRAM_START right after NV097_SET_TRANSFORM_EXECUTION_MODE in SelectVertexShader().
                             // but for passthrough shader, it won't call SelectVertexShader(), but only use NV097_SET_TRANSFORM_PROGRAM_START right before NV097_SET_TRANSFORM_EXECUTION_MODE
-                            if ((argv[1] == NV097_SET_TRANSFORM_PROGRAM_CXT_WRITE_EN_V_READ_ONLY)
-                                && ((argv[2]& COMMAND_WORD_MASK_METHOD)== NV097_SET_TRANSFORM_PROGRAM_START)) {
+                            //if ((argv[1] == NV097_SET_TRANSFORM_PROGRAM_CXT_WRITE_EN_V_READ_ONLY)
+                               // && ((argv[2]& COMMAND_WORD_MASK_METHOD)== NV097_SET_TRANSFORM_PROGRAM_START)) {
 								// for passthrough, argv[1] is always 0:NV097_SET_TRANSFORM_PROGRAM_CXT_WRITE_EN_V_READ_ONLY
 								// for program, argv[1] is vertexshader.flags & VERTEXSHADER_WRITE:1
 								// ** the only way to tell whether a vertexh shader is a program or a pass through,
@@ -4834,19 +4834,19 @@ int pgraph_handle_method(
                                 // set vertex shader dirty flag
                                 g_NV2AVertexShader_dirty = true;
 
-                            }
-                            else {
+                           // }
+                            //else {
                                 // if we hit here with g_Xbox_VertexShaderMode==FixedFunction, then we're in Passthrough
                                 //if (g_VertexShader_dirty == false) {
 
-                                    g_NV2A_VertexShaderMode = VertexShaderMode::Passthrough;
+                                    //g_NV2A_VertexShaderMode = VertexShaderMode::Passthrough;
                                     //g_UseFixedFunctionVertexShader = false;
 
                                     // for shader program, here we set it to default register 0, later when we reach NV097_SET_TRANSFORM_PROGRAM_START, we'll use the register addr passed in.
-                                    g_NV2A_VertexShader_FunctionSlots_StartAddress = 0;
+                                   // g_NV2A_VertexShader_FunctionSlots_StartAddress = 0;
 
                                     // set vertex shader dirty flag
-                                    g_NV2AVertexShader_dirty = true;
+                                    //g_NV2AVertexShader_dirty = true;
 
                                     // funtion key F7 flips this variable
                                     //g_bUsePassthroughHLSL = true;
@@ -4856,7 +4856,7 @@ int pgraph_handle_method(
                                     //extern void CxbxrSetSuperSampleScaleXY(float x, float y);
                                     //CxbxrSetSuperSampleScaleXY(tempConstant[0], tempConstant[1]);
                                 //}
-                            }
+                            //}
 						}
 						/*
 						fix function setup finished using 

@@ -4839,14 +4839,14 @@ int pgraph_handle_method(
                                 // if we hit here with g_Xbox_VertexShaderMode==FixedFunction, then we're in Passthrough
                                 //if (g_VertexShader_dirty == false) {
 
-                                    g_NV2A_VertexShaderMode = VertexShaderMode::Passthrough;
+                                   // g_NV2A_VertexShaderMode = VertexShaderMode::Passthrough;
                                     //g_UseFixedFunctionVertexShader = false;
 
                                     // for shader program, here we set it to default register 0, later when we reach NV097_SET_TRANSFORM_PROGRAM_START, we'll use the register addr passed in.
                                     g_NV2A_VertexShader_FunctionSlots_StartAddress = 0;
 
                                     // set vertex shader dirty flag
-                                    g_NV2AVertexShader_dirty = true;
+                                   // g_NV2AVertexShader_dirty = true;
 
                                     // funtion key F7 flips this variable
                                     //g_bUsePassthroughHLSL = true;
@@ -4856,7 +4856,7 @@ int pgraph_handle_method(
                                     //extern void CxbxrSetSuperSampleScaleXY(float x, float y);
                                     //CxbxrSetSuperSampleScaleXY(tempConstant[0], tempConstant[1]);
                                 //}
-                            }
+                           // }
 						}
 						/*
 						fix function setup finished using 

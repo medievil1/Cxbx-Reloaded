@@ -219,7 +219,7 @@ return input * input;
 }
 
 // Note : each component seems already in range [0..1], but two must be combined into one
-             
+
 #define TwoIntoOne(a,b) (((a * 256) + b) * 255) 
 #define CalcHiLo(in) H = TwoIntoOne(in.x, in.y); L = TwoIntoOne(in.z, in.w) // TODO : Verify whether this works at all !
 
@@ -352,19 +352,19 @@ PS_OUTPUT main(const PS_INPUT xIn)
 	const int FOG_TABLE_EXP2    = 2;
 	const int FOG_TABLE_LINEAR  = 3;
 
-    float fogFactor;
+	float fogFactor;
 
-    if(fogTableMode == FOG_TABLE_NONE) 
-       fogFactor = fogDepth;
-    if(fogTableMode == FOG_TABLE_EXP) 
-       fogFactor = 1 / exp(fogDepth * fogDensity); // 1 / e^(d * density)
-    if(fogTableMode == FOG_TABLE_EXP2) 
-       fogFactor = 1 / exp(pow(fogDepth * fogDensity, 2)); // 1 / e^((d * density)^2)
-    if(fogTableMode == FOG_TABLE_LINEAR) 
-       fogFactor = (fogEnd - fogDepth) / (fogEnd - fogStart);
+	if(fogTableMode == FOG_TABLE_NONE) 
+		fogFactor = fogDepth;
+	if(fogTableMode == FOG_TABLE_EXP) 
+		fogFactor = 1 / exp(fogDepth * fogDensity); // 1 / e^(d * density)
+	if(fogTableMode == FOG_TABLE_EXP2) 
+		fogFactor = 1 / exp(pow(fogDepth * fogDensity, 2)); // 1 / e^((d * density)^2)
+	if(fogTableMode == FOG_TABLE_LINEAR) 
+		fogFactor = (fogEnd - fogDepth) / (fogEnd - fogStart);
 	if (FOGENABLE == 0)
-	   fogFactor = 1;
-	   
+		fogFactor = 1;
+
 	// Local constants
 	const float4 zero = 0;
 	const float4 half = 0.5; // = s_negbias(zero)
@@ -401,7 +401,7 @@ PS_OUTPUT main(const PS_INPUT xIn)
 	fog = float4(c_fog.rgb, clamp(fogFactor, 0, 1)); // color from PSH_XBOX_CONSTANT_FOG, alpha from vertex shader output / pixel shader input
 
 	// XBOX SHADER PROGRAM MARKER
-			
+
 	// Copy r0.rgba to output
 	PS_OUTPUT xOut;
 

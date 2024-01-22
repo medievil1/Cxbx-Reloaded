@@ -352,7 +352,7 @@ PS_OUTPUT main(const PS_INPUT xIn)
 	const int FOG_TABLE_EXP2    = 2;
 	const int FOG_TABLE_LINEAR  = 3;
 
-	float fogFactor;
+		float fogFactor;
 
 	if(fogTableMode == FOG_TABLE_NONE) 
 		fogFactor = fogDepth;

@@ -247,7 +247,7 @@ float4 main(const PS_INPUT input) : COLOR {
 
 // Calculate the fog factor
 	// Some of this might be better done in the pixel shader?
-	float fogFactor;
+		float fogFactor;
 	if (state.FogTableMode == FOG_TABLE_NONE)
 		fogFactor = input.iFog;
 	if (state.FogTableMode == FOG_TABLE_EXP)

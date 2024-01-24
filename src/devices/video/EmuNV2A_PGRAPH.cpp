@@ -4807,7 +4807,7 @@ int pgraph_handle_method(
                                 g_NV2A_VertexShaderMode = VertexShaderMode::ShaderProgram;
                                 g_NV2AVertexShader_dirty = true;
 
-					}else if (slot== NV097_SET_TRANSFORM_EXECUTION_MODE_MODE_FIXED){//fix function mode
+					}else {//fix function mode
 
 						//Call CxbxImpl_SetVertexShaderInput(pg->vsh_FVF_handle) here? or set the global xbox vertex attribute []
 						//or g_Xbox_SetVertexShaderInput_Attributes = *CxbxGetVertexShaderAttributes(pXboxVertexShader); ??

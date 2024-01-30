@@ -4804,10 +4804,61 @@ int pgraph_handle_method(
 					*/
 					slot=arg0 & NV097_SET_TRANSFORM_EXECUTION_MODE_MODE;
 					if (slot == NV097_SET_TRANSFORM_EXECUTION_MODE_MODE_PROGRAM ) {//program mode, user program or pass through program
+						/*
+						xbox d3d calls NV097_SET_TRANSFORM_EXECUTION_MODE with method count =2, 
+						         (NV097_SET_TRANSFORM_EXECUTION_MODE,
+								  // NV097_SET_TRANSFORM_EXECUTION_MODE:
+									(DRF_DEF(097, _SET_TRANSFORM_EXECUTION_MODE, _MODE, _PROGRAM) |  DRF_DEF(097, _SET_TRANSFORM_EXECUTION_MODE, _RANGE_MODE, _PRIV)),
+								 // NV097_SET_TRANSFORM_PROGRAM_CXT_WRITE_EN:
+								      VertexShader.Flags & VERTEXSHADER_WRITE, method count 2)
+						*/
+                        if (method_count==2){
+                            // dirty hack. for program shader, there will be a NV097_SET_TRANSFORM_PROGRAM_START right after NV097_SET_TRANSFORM_EXECUTION_MODE in SelectVertexShader().
+                            // but for passthrough shader, it won't call SelectVertexShader(), but only use NV097_SET_TRANSFORM_PROGRAM_START right before NV097_SET_TRANSFORM_EXECUTION_MODE
+                            if ((argv[1] == NV097_SET_TRANSFORM_PROGRAM_CXT_WRITE_EN_V_READ_ONLY)
+                                && ((argv[2]& COMMAND_WORD_MASK_METHOD)== NV097_SET_TRANSFORM_PROGRAM_START)) {
+								// for passthrough, argv[1] is always 0:NV097_SET_TRANSFORM_PROGRAM_CXT_WRITE_EN_V_READ_ONLY
+								// for program, argv[1] is vertexshader.flags & VERTEXSHADER_WRITE:1
+								// ** the only way to tell whether a vertexh shader is a program or a pass through,
+								// ** is the sequence of call to NV097_SET_TRANSFORM_EXECUTION_MODE and NV097_SET_TRANSFORM_PROGRAM_START
+								// ** program uses D3DDevice_SelectVertexShader() which calls NV097_SET_TRANSFORM_EXECUTION_MODE first then calls NV097_SET_TRANSFORM_PROGRAM_START
+								// ** passthrough in SelectVertexShader() calls NV097_SET_TRANSFORM_PROGRAM_START first, then calls NV097_SET_TRANSFORM_EXECUTION_MODE
+
+
                                 g_NV2A_VertexShaderMode = VertexShaderMode::ShaderProgram;
                                 g_NV2AVertexShader_dirty = true;
 
-					}else {//fix function mode
+                            }
+                            else {
+                                // if we hit here with g_Xbox_VertexShaderMode==FixedFunction, then we're in Passthrough
+                                //if (g_VertexShader_dirty == false) {
+
+                                    g_NV2A_VertexShaderMode = VertexShaderMode::Passthrough;
+                                    //g_UseFixedFunctionVertexShader = false;
+
+                                    // for shader program, here we set it to default register 0, later when we reach NV097_SET_TRANSFORM_PROGRAM_START, we'll use the register addr passed in.
+                                    g_NV2A_VertexShader_FunctionSlots_StartAddress = 0;
+
+                                    // set vertex shader dirty flag
+                                    g_NV2AVertexShader_dirty = true;
+
+                                    // funtion key F7 flips this variable
+                                    //g_bUsePassthroughHLSL = true;
+                                    //float tempConstant[4];
+                                    // read constant register 0, CommonSetPassThroughProgram() sets register 0 constant with SuperSampleScaleX/Y
+                                    //CxbxrImpl_GetVertexShaderConstant(0 - X_D3DSCM_CORRECTION, tempConstant, 1);
+                                    //extern void CxbxrSetSuperSampleScaleXY(float x, float y);
+                                    //CxbxrSetSuperSampleScaleXY(tempConstant[0], tempConstant[1]);
+                                //}
+                            }
+						}
+						/*
+						fix function setup finished using 
+						push (NV097_SET_TRANSFORM_EXECUTION_MODE,
+								 NV097_SET_TRANSFORM_EXECUTION_MODE_MODE_FIXED|NV097_SET_TRANSFORM_EXECUTION_MODE_RANGE_MODE_PRIV, method count 1)
+						to start fix function vertex shader program
+						*/
+					}else if (slot== NV097_SET_TRANSFORM_EXECUTION_MODE_MODE_FIXED){//fix function mode
 
 						//Call CxbxImpl_SetVertexShaderInput(pg->vsh_FVF_handle) here? or set the global xbox vertex attribute []
 						//or g_Xbox_SetVertexShaderInput_Attributes = *CxbxGetVertexShaderAttributes(pXboxVertexShader); ??

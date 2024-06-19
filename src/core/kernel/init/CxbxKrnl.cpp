@@ -99,9 +99,6 @@ bool g_bIsChihiro = false;
 bool g_bIsDevKit = false;
 bool g_bIsRetail = false;
 
-// Indicates to disable/enable all interrupts when cli and sti instructions are executed
-std::atomic_bool g_bEnableAllInterrupts = true;
-
 // Set by the VMManager during initialization. Exported because it's needed in other parts of the emu
 size_t g_SystemMaxMemory = 0;
 
@@ -112,6 +109,8 @@ ULONG g_CxbxFatalErrorCode = FATAL_ERROR_NONE;
 
 // Define function located in EmuXApi so we can call it from here
 void SetupXboxDeviceTypes();
+
+extern xbox::void_xt NTAPI system_events(xbox::PVOID arg);
 
 void SetupPerTitleKeys()
 {
@@ -329,64 +328,6 @@ void InitSoftwareInterrupts()
 }
 #endif
 
-static xbox::void_xt NTAPI CxbxKrnlInterruptThread(xbox::PVOID param)
-{
-	CxbxSetThreadName("CxbxKrnl Interrupts");
-
-#if 0
-	InitSoftwareInterrupts();
-#endif
-
-	std::mutex m;
-	std::unique_lock<std::mutex> lock(m);
-	while (true) {
-		for (int i = 0; i < MAX_BUS_INTERRUPT_LEVEL; i++) {
-			// If the interrupt is pending and connected, process it
-			if (HalSystemInterrupts[i].IsPending() && EmuInterruptList[i] && EmuInterruptList[i]->Connected) {
-				HalSystemInterrupts[i].Trigger(EmuInterruptList[i]);
-			}
-		}
-		g_InterruptSignal.wait(lock, []() { return g_AnyInterruptAsserted.load() && g_bEnableAllInterrupts.load(); });
-		g_AnyInterruptAsserted = false;
-	}
-
-	assert(0);
-}
-
-static void CxbxKrnlClockThread(void* pVoid)
-{
-	LARGE_INTEGER CurrentTicks;
-	uint64_t Delta;
-	uint64_t Microseconds;
-	unsigned int IncrementScaling;
-	static uint64_t LastTicks = 0;
-	static uint64_t Error = 0;
-	static uint64_t UnaccountedMicroseconds = 0;
-
-	// This keeps track of how many us have elapsed between two cycles, so that the xbox clocks are updated
-	// with the proper increment (instead of blindly adding a single increment at every step)
-
-	if (LastTicks == 0) {
-		QueryPerformanceCounter(&CurrentTicks);
-		LastTicks = CurrentTicks.QuadPart;
-		CurrentTicks.QuadPart = 0;
-	}
-
-	QueryPerformanceCounter(&CurrentTicks);
-	Delta = CurrentTicks.QuadPart - LastTicks;
-	LastTicks = CurrentTicks.QuadPart;
-
-	Error += (Delta * SCALE_S_IN_US);
-	Microseconds = Error / HostQPCFrequency;
-	Error -= (Microseconds * HostQPCFrequency);
-
-	UnaccountedMicroseconds += Microseconds;
-	IncrementScaling = (unsigned int)(UnaccountedMicroseconds / 1000); // -> 1 ms = 1000us -> time between two xbox clock interrupts
-	UnaccountedMicroseconds -= (IncrementScaling * 1000);
-
-	xbox::KiClockIsr(IncrementScaling);
-}
-
 void MapThunkTable(uint32_t* kt, uint32_t* pThunkTable)
 {
     const bool SendDebugReports = (pThunkTable == CxbxKrnl_KernelThunkTable) && CxbxDebugger::CanReport();
@@ -542,7 +483,10 @@ static void CxbxrKrnlSetupMemorySystem(int BootFlags, unsigned emulate_system, u
 	}
 }
 
-static bool CxbxrKrnlXbeSystemSelector(int BootFlags, unsigned& reserved_systems, blocks_reserved_t blocks_reserved)
+static bool CxbxrKrnlXbeSystemSelector(int BootFlags,
+                                       unsigned& reserved_systems,
+                                       blocks_reserved_t blocks_reserved,
+                                       HardwareModel &hardwareModel)
 {
 	unsigned int emulate_system = 0;
 	// Get title path :
@@ -683,6 +627,7 @@ static bool CxbxrKrnlXbeSystemSelector(int BootFlags, unsigned& reserved_systems
 		// Detect XBE type :
 		XbeType xbeType = CxbxKrnl_Xbe->GetXbeType();
 		EmuLogInit(LOG_LEVEL::INFO, "Auto detect: XbeType = %s", GetXbeTypeToStr(xbeType));
+
 		// Convert XBE type into corresponding system to emulate.
 		switch (xbeType) {
 			case XbeType::xtChihiro:
@@ -695,6 +640,10 @@ static bool CxbxrKrnlXbeSystemSelector(int BootFlags, unsigned& reserved_systems
 				emulate_system = SYSTEM_XBOX;
 				break;
 			DEFAULT_UNREACHABLE;
+		}
+
+		if (std::filesystem::exists(xbeDirectory / "boot.id")) {
+			emulate_system = SYSTEM_CHIHIRO;
 		}
 	}
 
@@ -717,6 +666,17 @@ static bool CxbxrKrnlXbeSystemSelector(int BootFlags, unsigned& reserved_systems
 	g_bIsChihiro = (emulate_system == SYSTEM_CHIHIRO);
 	g_bIsDevKit = (emulate_system == SYSTEM_DEVKIT);
 	g_bIsRetail = (emulate_system == SYSTEM_XBOX);
+	if (g_bIsChihiro) {
+		hardwareModel = HardwareModel::Chihiro_Type1; // TODO: Make configurable to support Type-3 console.
+	}
+	else if (g_bIsDevKit) {
+		hardwareModel = HardwareModel::DebugKit_r1_2; // Unlikely need to make configurable.
+	}
+	// Retail (default)
+	else {
+		// Should not be configurable. Otherwise, titles compiled with newer XDK will patch older xbox kernel.
+		hardwareModel = HardwareModel::Revision1_6;
+	}
 
 #ifdef CHIHIRO_WORK
 	// If this is a Chihiro title, we need to patch the init flags to disable HDD setup
@@ -934,7 +894,8 @@ static bool CxbxrKrnlPrepareXbeMap()
 	Xbe::Header* XbeHeader,
 	uint32_t XbeHeaderSize,
 	void (*Entry)(),
-	int BootFlags
+	int BootFlags,
+	HardwareModel hardwareModel
 );
 
 void CxbxKrnlEmulate(unsigned int reserved_systems, blocks_reserved_t blocks_reserved)
@@ -1088,7 +1049,8 @@ void CxbxKrnlEmulate(unsigned int reserved_systems, blocks_reserved_t blocks_res
 	// using XeLoadImage from LaunchDataPage->Header.szLaunchPath
 
 	// Now we can load the XBE :
-	if (!CxbxrKrnlXbeSystemSelector(BootFlags, reserved_systems, blocks_reserved)) {
+	HardwareModel hardwareModel = HardwareModel::Revision1_6; // It is configured by CxbxrKrnlXbeSystemSelector function according to console type.
+	if (!CxbxrKrnlXbeSystemSelector(BootFlags, reserved_systems, blocks_reserved, hardwareModel)) {
 		return;
 	}
 
@@ -1116,7 +1078,8 @@ void CxbxKrnlEmulate(unsigned int reserved_systems, blocks_reserved_t blocks_res
 			(Xbe::Header*)CxbxKrnl_Xbe->m_Header.dwBaseAddr,
 			CxbxKrnl_Xbe->m_Header.dwSizeofHeaders,
 			(void(*)())EntryPoint,
- 			BootFlags
+ 			BootFlags,
+			hardwareModel
 		);
 	}
 
@@ -1178,7 +1141,8 @@ static void CxbxrKrnlInitHacks()
 	Xbe::Header            *pXbeHeader,
 	uint32_t                dwXbeHeaderSize,
 	void(*Entry)(),
-	int BootFlags)
+	int BootFlags,
+	HardwareModel hardwareModel)
 {
 	unsigned Host2XbStackBaseReserved = 0;
 	__asm mov Host2XbStackBaseReserved, esp;
@@ -1202,7 +1166,7 @@ static void CxbxrKrnlInitHacks()
 	g_pCertificate = &CxbxKrnl_Xbe->m_Certificate;
 
 	// Initialize timer subsystem
-	Timer_Init();
+	timer_init();
 	// for unicode conversions
 	setlocale(LC_ALL, "English");
 	// Initialize DPC global
@@ -1344,10 +1308,11 @@ static void CxbxrKrnlInitHacks()
 	}
 	xbox::PsInitSystem();
 	xbox::KiInitSystem();
-	
+	xbox::RtlInitSystem();
+
 	// initialize graphics
 	EmuLogInit(LOG_LEVEL::DEBUG, "Initializing render window.");
-	CxbxInitWindow(true);
+	CxbxInitWindow();
 
 	// Now process the boot flags to see if there are any special conditions to handle
 	if (BootFlags & BOOT_EJECT_PENDING) {} // TODO
@@ -1383,7 +1348,7 @@ static void CxbxrKrnlInitHacks()
 		SetupXboxDeviceTypes();
 	}
 
-	InitXboxHardware(HardwareModel::Revision1_5); // TODO : Make configurable
+	InitXboxHardware(hardwareModel);
 
 	// Read Xbox video mode from the SMC, store it in HalBootSMCVideoMode
 	xbox::HalReadSMBusValue(SMBUS_ADDRESS_SYSTEM_MICRO_CONTROLLER, SMC_COMMAND_AV_PACK, FALSE, (xbox::PULONG)&xbox::HalBootSMCVideoMode);
@@ -1456,23 +1421,17 @@ static void CxbxrKrnlInitHacks()
 #endif
 
 	EmuX86_Init();
-	// Create the interrupt processing thread
+	// Start the event thread
 	xbox::HANDLE hThread;
-	CxbxrCreateThread(&hThread, xbox::zeroptr, CxbxKrnlInterruptThread, xbox::zeroptr, FALSE);
-	// Start the kernel clock thread
-	TimerObject* KernelClockThr = Timer_Create(CxbxKrnlClockThread, nullptr, "Kernel clock thread", true);
-	Timer_Start(KernelClockThr, SCALE_MS_IN_NS);
-
+	xbox::PsCreateSystemThread(&hThread, xbox::zeroptr, system_events, xbox::zeroptr, FALSE);
+	// Launch the xbe
 	xbox::PsCreateSystemThread(&hThread, xbox::zeroptr, CxbxLaunchXbe, Entry, FALSE);
 
-	EmuKeFreePcr();
-	__asm add esp, Host2XbStackSizeReserved;
-
-	// This will wait forever
-	std::condition_variable cv;
-	std::mutex m;
-	std::unique_lock<std::mutex> lock(m);
-	cv.wait(lock, [] { return false; });
+	xbox::KeRaiseIrqlToDpcLevel();
+	while (true) {
+		xbox::KeWaitForDpc();
+		ExecuteDpcQueue();
+	}
 }
 
 // REMARK: the following is useless, but PatrickvL has asked to keep it for documentation purposes
@@ -1494,7 +1453,7 @@ void CxbxrKrnlSuspendThreads()
 
 	// Don't use EmuKeGetPcr because that asserts kpcr
 	xbox::KPCR* Pcr = reinterpret_cast<xbox::PKPCR>(__readfsdword(TIB_ArbitraryDataSlot));
-	
+
 	// If there's nothing in list entry, skip this step.
 	if (!ThreadListEntry) {
 		return;
